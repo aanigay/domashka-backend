@@ -1,0 +1,356 @@
+basePath: /v1
+definitions:
+  v1.AddCartItemRequest:
+    properties:
+      additional_ingredients_ids:
+        items:
+          type: integer
+        type: array
+      chef_id:
+        type: string
+      customer_notes:
+        type: string
+      dish_id:
+        type: string
+      removed_ingredients_ids:
+        items:
+          type: integer
+        type: array
+      user_id:
+        type: string
+    type: object
+  v1.ClearCartRequest:
+    properties:
+      user_id:
+        type: string
+    type: object
+  v1.CreateCartRequest:
+    properties:
+      user_id:
+        type: string
+    type: object
+  v1.CreateRequest:
+    properties:
+      alias:
+        description: Полное имя (ФИО)
+        type: string
+      birthday:
+        description: День рождения (опционально)
+        type: string
+      email:
+        description: Электронная почта (опционально)
+        type: string
+      external_id:
+        description: Внешний ID (опционально)
+        type: string
+      external_type:
+        description: Внешний статус (0, 1, 2)
+        type: integer
+      first_name:
+        description: Имя
+        type: string
+      last_name:
+        description: Фамилия (опционально)
+        type: string
+      notification_flag:
+        description: Уведомления (0 = включены, 1 = выключены)
+        type: integer
+      number_phone:
+        description: Телефон (опционально)
+        type: string
+      role:
+        description: Роль (client, chef, admin)
+        type: string
+      second_name:
+        description: Отчество (опционально)
+        type: string
+      status:
+        description: Состояние (0 = не бан, 1 = бан)
+        type: integer
+      telegram_name:
+        description: Telegram username (опционально)
+        type: string
+      username:
+        description: Уникальный идентификатор
+        type: string
+    type: object
+  v1.RemoveCartItemRequest:
+    properties:
+      id:
+        type: string
+    type: object
+  v1.UpdateCartItemRequest:
+    properties:
+      additional_ingredients_ids:
+        items:
+          type: integer
+        type: array
+      chef_id:
+        type: string
+      customer_notes:
+        type: string
+      dish_id:
+        type: string
+      id:
+        type: string
+      removed_ingredients_ids:
+        items:
+          type: integer
+        type: array
+      user_id:
+        type: string
+    type: object
+  v1.UpdateRequest:
+    properties:
+      alias:
+        description: Полное имя (ФИО)
+        type: string
+      birthday:
+        description: День рождения (опционально)
+        type: string
+      email:
+        description: Электронная почта (опционально)
+        type: string
+      external_id:
+        description: Внешний ID (опционально)
+        type: string
+      external_type:
+        description: Внешний статус (0, 1, 2)
+        type: integer
+      first_name:
+        description: Имя
+        type: string
+      last_name:
+        description: Фамилия (опционально)
+        type: string
+      notification_flag:
+        description: Уведомления (0 = включены, 1 = выключены)
+        type: integer
+      number_phone:
+        description: Телефон (опционально)
+        type: string
+      role:
+        description: Роль (client, chef, admin)
+        type: string
+      second_name:
+        description: Отчество (опционально)
+        type: string
+      status:
+        description: Состояние (0 = не бан, 1 = бан)
+        type: integer
+      telegram_name:
+        description: Telegram username (опционально)
+        type: string
+    type: object
+host: localhost:9093
+info:
+  contact:
+    email: support@swagger.io
+    name: API Support
+    url: http://www.swagger.io/support
+  description: This is a sample server celler server.
+  license:
+    name: Apache 2.0
+    url: http://www.apache.org/licenses/LICENSE-2.0.html
+  termsOfService: http://swagger.io/terms/
+  title: Domashka
+  version: "1.0"
+paths:
+  /cart/{id}:
+    get:
+      consumes:
+      - application/json
+      description: Получение корзины
+      parameters:
+      - description: user id
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses: {}
+      summary: Получение корзины
+      tags:
+      - cart
+  /cart/{id}/items:
+    get:
+      consumes:
+      - application/json
+      description: Получение всех товаров в корзине
+      parameters:
+      - description: user id
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses: {}
+      summary: Получение всех товаров в корзине
+      tags:
+      - cart
+  /cart/add_item:
+    post:
+      consumes:
+      - application/json
+      description: Добавление товара в корзину
+      parameters:
+      - description: body
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/v1.AddCartItemRequest'
+      produces:
+      - application/json
+      responses: {}
+      summary: Добавление товара в корзину
+      tags:
+      - cart
+  /cart/clear:
+    post:
+      consumes:
+      - application/json
+      description: Очищение корзины
+      parameters:
+      - description: body
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/v1.ClearCartRequest'
+      produces:
+      - application/json
+      responses: {}
+      summary: Очищение корзины
+      tags:
+      - cart
+  /cart/create:
+    post:
+      consumes:
+      - application/json
+      description: Создание корзины
+      parameters:
+      - description: body
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/v1.CreateCartRequest'
+      produces:
+      - application/json
+      responses: {}
+      summary: Создание корзины
+      tags:
+      - cart
+  /cart/remove_item:
+    post:
+      consumes:
+      - application/json
+      description: Удаление товара из корзины
+      parameters:
+      - description: body
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/v1.RemoveCartItemRequest'
+      produces:
+      - application/json
+      responses: {}
+      summary: Удаление товара из корзины
+      tags:
+      - cart
+  /cart/update_item:
+    post:
+      consumes:
+      - application/json
+      description: Обновление товара в корзине
+      parameters:
+      - description: body
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/v1.UpdateCartItemRequest'
+      produces:
+      - application/json
+      responses: {}
+      summary: Обновление товара в корзине
+      tags:
+      - cart
+  /users/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: Удаление пользователя по ID
+      parameters:
+      - description: id
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses: {}
+      summary: Удаление пользователя
+      tags:
+      - users
+    get:
+      consumes:
+      - application/json
+      description: Получение пользователя по ID
+      parameters:
+      - description: id
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses: {}
+      summary: Получение пользователя
+      tags:
+      - users
+    put:
+      consumes:
+      - application/json
+      description: Обновление данных пользователя по ID
+      parameters:
+      - description: id
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: body
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/v1.UpdateRequest'
+      produces:
+      - application/json
+      responses: {}
+      summary: Обновление пользователя
+      tags:
+      - users
+  /users/create:
+    post:
+      consumes:
+      - application/json
+      description: Создание пользователя
+      parameters:
+      - description: body
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/v1.CreateRequest'
+      produces:
+      - application/json
+      responses: {}
+      summary: Создание пользователя
+      tags:
+      - users
+swagger: "2.0"
