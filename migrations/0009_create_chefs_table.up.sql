@@ -1,0 +1,13 @@
+CREATE TABLE IF NOT EXISTS chefs
+(
+    id BIGINT PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
+    name TEXT NOT NULL,
+    image_url TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS chef_ratings
+(
+    chef_id BIGINT PRIMARY KEY,
+    rating NUMERIC NOT NULL,
+    reviews_count INT NOT NULL
+);

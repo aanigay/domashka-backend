@@ -2,7 +2,9 @@ package geo
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"github.com/jackc/pgx/v4"
 
 	addressentity "domashka-backend/internal/entity/geo"
 	"domashka-backend/pkg/postgres"
@@ -16,6 +18,14 @@ func New(pg *postgres.Postgres) *Repository {
 	return &Repository{
 		pg: pg,
 	}
+}
+
+func (r *Repository) PushClientAddress(ctx context.Context, addressID int64) error {
+	_, err := r.pg.Pool.Exec(
+		ctx,
+		`UPDATE client_addresses SET updated_at = NOW() WHERE id = $1;`,
+		addressID)
+	return err
 }
 
 func (r *Repository) AddClientAddress(ctx context.Context, clientID int, address addressentity.Address) error {
@@ -50,26 +60,36 @@ func (r *Repository) AddChefAddress(ctx context.Context, chefID int, address add
 
 func (r *Repository) GetClientAddresses(ctx context.Context, clientID int) ([]addressentity.Address, error) {
 	rows, err := r.pg.Pool.Query(ctx,
-		`SELECT ST_Y(geom) AS latitude, ST_X(geom) AS longitude, address_type, name, full_address, comment 
+		`SELECT id, ST_Y(geom::geometry) AS latitude, ST_X(geom::geometry) AS longitude, address_type, name, full_address, comment, flat_number, floor_number, entrance_number, intercom_number, courier_comment
 		 FROM client_addresses 
-		 WHERE client_id = $1`,
+		 WHERE client_id = $1
+		 ORDER BY updated_at DESC`,
 		clientID,
 	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return []addressentity.Address{}, nil
+	}
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	var addresses []addressentity.Address
+	addresses := make([]addressentity.Address, 0)
 	for rows.Next() {
 		var address addressentity.Address
 		if err := rows.Scan(
+			&address.ID,
 			&address.Latitude,
 			&address.Longitude,
 			&address.AddressType,
 			&address.Name,
 			&address.Address,
 			&address.Comment,
+			&address.FlatNumber,
+			&address.FloorNumber,
+			&address.EntranceNumber,
+			&address.IntercomNumber,
+			&address.CourierComment,
 		); err != nil {
 			return nil, err
 		}
@@ -78,10 +98,33 @@ func (r *Repository) GetClientAddresses(ctx context.Context, clientID int) ([]ad
 	return addresses, nil
 }
 
+func (r *Repository) GetAddressByID(ctx context.Context, id int64) (*addressentity.Address, error) {
+	var address addressentity.Address
+	err := r.pg.Pool.QueryRow(ctx,
+		`SELECT id, ST_Y(geom::geometry) AS latitude, ST_X(geom::geometry) AS longitude, address_type, name, full_address, comment, flat_number, floor_number, entrance_number, intercom_number, courier_comment
+				FROM client_addresses
+				WHERE id = $1`,
+		id,
+	).Scan(
+		&address.ID,
+		&address.Latitude,
+		&address.Longitude,
+		&address.AddressType,
+		&address.Name,
+		&address.Address,
+		&address.Comment,
+		&address.FlatNumber,
+		&address.FloorNumber,
+		&address.EntranceNumber,
+		&address.IntercomNumber,
+		&address.CourierComment)
+	return &address, err
+}
+
 func (r *Repository) GetChefAddress(ctx context.Context, chefID int) (addressentity.Address, error) {
 	var address addressentity.Address
 	err := r.pg.Pool.QueryRow(ctx,
-		`SELECT ST_Y(geom) AS latitude, ST_X(geom) AS longitude, full_address, comment 
+		`SELECT ST_Y(geom::geometry) AS latitude, ST_X(geom::geometry) AS longitude, full_address, comment 
 		 FROM chef_addresses 
 		 WHERE chef_id = $1 LIMIT 1`,
 		chefID,
@@ -102,14 +145,20 @@ func (r *Repository) UpdateClientAddress(ctx context.Context, clientID int, addr
 		`UPDATE client_addresses 
 		 SET address_type = $1, name = $2, full_address = $3, comment = $4,
 		     geom = ST_SetSRID(ST_MakePoint($5, $6),4326)::geography,
-		     updated_at = NOW()
-		 WHERE client_id = $7 AND id = $8`,
+		     updated_at = NOW(),
+		     flat_number = $7, floor_number = $8, entrance_number = $9, intercom_number = $10, courier_comment = $11
+		 WHERE client_id = $12 AND id = $13`,
 		address.AddressType,
 		address.Name,
 		address.Address,
 		address.Comment,
 		address.Longitude, // (longitude, latitude)
 		address.Latitude,
+		address.FlatNumber,
+		address.FloorNumber,
+		address.EntranceNumber,
+		address.IntercomNumber,
+		address.CourierComment,
 		clientID,
 		addressID,
 	)
@@ -189,7 +238,7 @@ func (r *Repository) GetClientsAddrByRange(ctx context.Context, chefID int, radi
 		Longitude float64
 	}
 	err := r.pg.Pool.QueryRow(ctx,
-		`SELECT ST_Y(geom) AS latitude, ST_X(geom) AS longitude 
+		`SELECT ST_Y(geom::geometry) AS latitude, ST_X(geom::geometry) AS longitude 
 		 FROM chef_addresses 
 		 WHERE chef_id = $1`,
 		chefID,
@@ -201,7 +250,7 @@ func (r *Repository) GetClientsAddrByRange(ctx context.Context, chefID int, radi
 	rangeMeters := radius * 1000
 
 	rows, err := r.pg.Pool.Query(ctx,
-		`SELECT ST_Y(geom) AS latitude, ST_X(geom) AS longitude, address_type, name, full_address, comment
+		`SELECT ST_Y(geom::geometry) AS latitude, ST_X(geom::geometry) AS longitude, address_type, name, full_address, comment
 		 FROM client_addresses
 		 WHERE ST_DWithin(
 		     geom,
@@ -233,4 +282,25 @@ func (r *Repository) GetClientsAddrByRange(ctx context.Context, chefID int, radi
 		addresses = append(addresses, address)
 	}
 	return addresses, nil
+}
+
+func (r *Repository) GetLastUpdatedClientAddress(ctx context.Context, clientID int64) (*addressentity.Address, error) {
+	var address struct {
+		id          int64
+		fullAddress string
+	}
+	err := r.pg.Pool.QueryRow(ctx,
+		`SELECT id, full_address 
+		 FROM client_addresses 
+		 WHERE client_id = $1 ORDER BY updated_at DESC LIMIT 1`, clientID).Scan(&address.id, &address.fullAddress)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("could not get last updated client address: %w", err)
+	}
+	return &addressentity.Address{
+		ID:      address.id,
+		Address: address.fullAddress,
+	}, nil
 }

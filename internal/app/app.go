@@ -7,25 +7,37 @@ import (
 	"log"
 
 	"github.com/gin-gonic/gin"
-
-	_ "domashka-backend/docs"
+	tele "gopkg.in/telebot.v4"
 
 	"domashka-backend/config"
-	v1 "domashka-backend/internal/controller/http/v1"
-	cartpgrepo "domashka-backend/internal/repositories/cart"
-	geopgrepo "domashka-backend/internal/repositories/geo"
-	notifpgrepo "domashka-backend/internal/repositories/notifications"
-	userspgrepo "domashka-backend/internal/repositories/users"
-	authusecase "domashka-backend/internal/usecase/auth"
-	cartusecase "domashka-backend/internal/usecase/cart"
-	geousecase "domashka-backend/internal/usecase/geo"
-	jwtusecase "domashka-backend/internal/usecase/jwt"
-	notifusecase "domashka-backend/internal/usecase/notifications"
-	usersusecase "domashka-backend/internal/usecase/users"
+
 	"domashka-backend/pkg/logger"
 	smtpmail "domashka-backend/pkg/mail"
 	"domashka-backend/pkg/postgres"
 	"domashka-backend/pkg/redis"
+	"domashka-backend/pkg/sms"
+
+	v1 "domashka-backend/internal/controller/http/v1"
+	"domashka-backend/internal/controller/telegram"
+	cartrepo "domashka-backend/internal/repositories/cart"
+	chefsrepo "domashka-backend/internal/repositories/chefs"
+	dishesrepo "domashka-backend/internal/repositories/dishes"
+	geopgrepo "domashka-backend/internal/repositories/geo"
+	notifpgrepo "domashka-backend/internal/repositories/notifications"
+	ordersrepo "domashka-backend/internal/repositories/orders"
+	shiftsrepo "domashka-backend/internal/repositories/shifts"
+	userspgrepo "domashka-backend/internal/repositories/users"
+	authusecase "domashka-backend/internal/usecase/auth"
+	cartusecase "domashka-backend/internal/usecase/cart"
+	chefsusecase "domashka-backend/internal/usecase/chefs"
+	dishesusecase "domashka-backend/internal/usecase/dishes"
+	geousecase "domashka-backend/internal/usecase/geo"
+	jwtusecase "domashka-backend/internal/usecase/jwt"
+	notifusecase "domashka-backend/internal/usecase/notifications"
+	ordersusecase "domashka-backend/internal/usecase/order"
+	shiftsusecase "domashka-backend/internal/usecase/shifts"
+	"domashka-backend/internal/usecase/tg"
+	usersusecase "domashka-backend/internal/usecase/users"
 )
 
 type Application struct {
@@ -48,20 +60,44 @@ func Run(cfg *config.Config) {
 	}
 
 	smtpClient := smtpmail.New(cfg.SMTP)
+	smsClient := sms.New()
 
 	// Repositories
 	notifPGRepo := notifpgrepo.New(pg)
 	usersPGRepo := userspgrepo.New(pg)
 	geoPGRepo := geopgrepo.New(pg)
-	cartPGRepo := cartpgrepo.New(pg)
+	dishesPGRepo := dishesrepo.New(pg)
+	chefsPGRepo := chefsrepo.New(pg)
+	cartPGRepo := cartrepo.New(pg)
+	ordersPGRepo := ordersrepo.New(pg)
+	shiftsPGRepo := shiftsrepo.New(pg)
 
-	// Use Cases (сервсисы)
-	userUseCase := usersusecase.New(usersPGRepo, cartPGRepo)
+	// Use Cases (сервисы)
+	userUseCase := usersusecase.New(usersPGRepo)
+	dishesUsecase := dishesusecase.New(dishesPGRepo)
+	chefsUsecase := chefsusecase.New(chefsPGRepo)
 	jwtUseCase := jwtusecase.New(cfg.JWT)
-	authUseCase := authusecase.New(usersPGRepo, redisClient, jwtUseCase)
+	authUseCase := authusecase.New(usersPGRepo, redisClient, jwtUseCase, smsClient)
 	geoUseCase := geousecase.New(geoPGRepo)
 	notifUseCase := notifusecase.New(notifPGRepo, smtpClient)
-	cartUseCase := cartusecase.New(cartPGRepo)
+	cartUsecase := cartusecase.New(cartPGRepo)
+	shiftsUsecase := shiftsusecase.New(shiftsPGRepo)
+	ordersUsecase := ordersusecase.New(geoUseCase, cartUsecase, shiftsPGRepo, ordersPGRepo)
+
+	// TG bot
+
+	if cfg.Telegram.IsEnabled {
+		tgUsecase := tg.New(redisClient, usersPGRepo, jwtUseCase)
+		bot, err := tele.NewBot(tele.Settings{
+			Token: cfg.Telegram.Token,
+		})
+
+		if err != nil {
+			log.Fatalf("Ошибка инициализации Telegram бота: %v", err)
+		}
+		telegram.NewBot(bot, tgUsecase)
+		go bot.Start()
+	}
 
 	// Http Server
 	handler := gin.New()
@@ -73,7 +109,11 @@ func Run(cfg *config.Config) {
 		jwtUseCase,
 		notifUseCase,
 		geoUseCase,
-		cartUseCase,
+		dishesUsecase,
+		chefsUsecase,
+		cartUsecase,
+		ordersUsecase,
+		shiftsUsecase,
 	)
 
 	err = handler.Run(fmt.Sprintf(":%s", cfg.HostConfig.Port))

@@ -2,6 +2,7 @@ package v1
 
 import (
 	notifEntity "domashka-backend/internal/entity/notifications"
+	"domashka-backend/internal/utils/validation"
 	"github.com/gin-gonic/gin"
 	"log"
 	"net/http"
@@ -109,7 +110,7 @@ func (h *NotificationHandler) CreateNotification(c *gin.Context) {
 			return
 		}
 	case notifEntity.ChannelSMS:
-		if !validatePhoneNumber(notification.Recipient) {
+		if !validation.ValidatePhoneNumber(notification.Recipient) {
 			c.JSON(http.StatusBadRequest, gin.H{
 				"status":  "error",
 				"message": "Invalid phone number format.",
@@ -152,16 +153,6 @@ func validateEmail(email string) bool {
 	var emailRegex = regexp.MustCompile(`^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`)
 
 	return emailRegex.MatchString(email)
-}
-
-func validatePhoneNumber(phone string) bool {
-	// Regular expression to match common phone number formats:
-	// Supports international (+1234567890)
-	// Supports standard formats (123-456-7890, (123) 456-7890, 1234567890)
-	// Allows spaces, dashes, and parentheses
-	var phoneRegex = regexp.MustCompile(`^\+?[0-9]{1,3}?[-. (]*[0-9]{3}[-. )]*[0-9]{3}[-. ]*[0-9]{4,6}$`)
-
-	return phoneRegex.MatchString(phone)
 }
 
 func (h *NotificationHandler) ResendNotification(c *gin.Context) {

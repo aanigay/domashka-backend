@@ -14,4 +14,7 @@ type GeoRepository interface {
 	UpdateChefAddress(ctx context.Context, chefID int, address addressentity.Address) error
 	GetChefsAddrByRange(ctx context.Context, clientAddressID int, radius float64) ([]addressentity.Address, error)
 	GetClientsAddrByRange(ctx context.Context, chefID int, radius float64) ([]addressentity.Address, error)
+	GetLastUpdatedClientAddress(ctx context.Context, clientID int64) (*addressentity.Address, error)
+	GetAddressByID(ctx context.Context, id int64) (*addressentity.Address, error)
+	PushClientAddress(ctx context.Context, addressID int64) error
 }

@@ -17,7 +17,7 @@ type RedisConfig struct {
 func NewRedisConfig() *RedisConfig {
 	err := godotenv.Load()
 	if err != nil {
-		log.Fatalf("Ошибка загрузки файла .env: %v", err)
+		log.Fatalf("Ошибка загрузки файла .env.example: %v", err)
 	}
 
 	redisDBStr := os.Getenv("REDIS_DB")

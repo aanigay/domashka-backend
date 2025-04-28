@@ -17,6 +17,7 @@ type Config struct {
 	Redis      *RedisConfig
 	JWT        *JWTConfig
 	SMTP       *SMTPEmailConfig
+	Telegram   *TelegramConfig
 }
 
 type SMTPEmailConfig struct {
@@ -45,6 +46,11 @@ type DBConfig struct {
 
 type HostConfig struct {
 	Port string
+}
+
+type TelegramConfig struct {
+	Token     string
+	IsEnabled bool
 }
 
 // GetConfig загружает конфигурацию из файла .env и переменных окружения
@@ -94,6 +100,12 @@ func GetConfig() *Config {
 	// Преобразуем в time.Duration
 	retryDelayDuration := time.Duration(smtpRetryDelay) * time.Second
 
+	tgEnabled := os.Getenv("TG_ENABLED") == "true"
+	tgToken := os.Getenv("TG_TOKEN")
+	if tgToken == "" && tgEnabled {
+		log.Fatalf("Не задан токен Telegram бота")
+	}
+
 	return &Config{
 		HostConfig: &HostConfig{
 			Port: os.Getenv("PORT"),
@@ -119,6 +131,10 @@ func GetConfig() *Config {
 			Password:   os.Getenv("SMTP_PASSWORD"),
 			MaxRetries: smtpMaxRetries,
 			RetryDelay: retryDelayDuration,
+		},
+		Telegram: &TelegramConfig{
+			Token:     tgToken,
+			IsEnabled: tgEnabled,
 		},
 	}
 }

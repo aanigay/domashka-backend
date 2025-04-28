@@ -12,16 +12,61 @@ type GeoHandler struct {
 	geoUsecase geoUsecase
 }
 
-// AddClientAddress godoc
-// @Summary      Удаление товара из корзины
-// @Description  Удаление товара из корзины
-// @Tags         cart
-// @Accept       json
-// @Produce      json
-// @Param        request   body      RemoveCartItemRequest  true  "body"
-// @Router       /cart/remove_item [post]
+func RegisterGeoHandlers(router *gin.RouterGroup, g geoUsecase) {
+
+	h := GeoHandler{geoUsecase: g}
+
+	geoGroup := router.Group("/geo")
+	{
+		geoGroup.POST("/clients/:client_id/addresses/push/:address_id", h.PushClientAddress)
+		geoGroup.GET("/clients/:client_id/addresses/:address_id", h.GetAddressDetails)
+		geoGroup.POST("/clients/:client_id/addresses", h.AddClientAddress)
+		geoGroup.POST("/clients/:client_id/addresses/:address_id", h.UpdateClientAddress)
+		geoGroup.GET("/clients/:client_id/addresses", h.GetClientAddresses)
+		geoGroup.GET("/chefs/:chef_id/address", h.GetChefAddress)
+		geoGroup.POST("/chefs/:chef_id/address", h.UpdateOrPostChefAddress)
+		geoGroup.GET("/search/chefs-near-client-address/:client_address_id", h.GetChefsAddrByRange)
+		geoGroup.GET("/search/clients-near-chef/:chef_id", h.GetClientsAddrByRange)
+	}
+}
+
+func (h *GeoHandler) PushClientAddress(ctx *gin.Context) {
+	addressID, err := strconv.ParseInt(ctx.Param("address_id"), 10, 64)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Invalid address_id"})
+		return
+	}
+	err = h.geoUsecase.PushClientAddress(ctx, addressID)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": err.Error()})
+		return
+	}
+	ctx.JSON(http.StatusOK, gin.H{"status": "success"})
+}
+
+func (h *GeoHandler) GetAddressDetails(ctx *gin.Context) {
+	addressID, err := strconv.ParseInt(ctx.Param("address_id"), 10, 64)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Invalid address_id"})
+		return
+	}
+	address, err := h.geoUsecase.GetAddressByID(ctx, addressID)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": err.Error()})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, gin.H{"status": "success", "data": address})
+}
+
 func (h *GeoHandler) AddClientAddress(ctx *gin.Context) {
 	var address geoEntity.Address
+	type requestBody struct {
+		Address   string  `json:"address"`
+		Latitude  float64 `json:"latitude"`
+		Longitude float64 `json:"longitude"`
+	}
+	var body requestBody
 	clientID := ctx.Param("client_id")
 	clientIDInt, err := strconv.Atoi(clientID)
 	if err != nil {
@@ -29,16 +74,19 @@ func (h *GeoHandler) AddClientAddress(ctx *gin.Context) {
 		return
 	}
 
-	if err := ctx.BindJSON(&address); err != nil {
+	if err := ctx.BindJSON(&body); err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Invalid request"})
 		return
 	}
+	//
+	//if !validation.IsAddressInRussia(address) {
+	//	ctx.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Address is not in Russia"})
+	//	return
+	//}
 
-	if !validation.IsAddressInRussia(address) {
-		ctx.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Address is not in Russia"})
-		return
-	}
-
+	address.Address = body.Address
+	address.Latitude = body.Latitude
+	address.Longitude = body.Longitude
 	if err := h.geoUsecase.AddClientAddress(ctx, clientIDInt, address); err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": err.Error()})
 		return
@@ -67,11 +115,11 @@ func (h *GeoHandler) UpdateClientAddress(ctx *gin.Context) {
 		ctx.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Invalid request"})
 		return
 	}
-
-	if !validation.IsAddressInRussia(address) {
-		ctx.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Address is not in Russia"})
-		return
-	}
+	//
+	//if !validation.IsAddressInRussia(address) {
+	//	ctx.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Address is not in Russia"})
+	//	return
+	//}
 
 	if err := h.geoUsecase.UpdateClientAddress(ctx, clientIDInt, addressIDInt, address); err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": err.Error()})
@@ -195,20 +243,4 @@ func (h *GeoHandler) GetClientsAddrByRange(ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusOK, gin.H{"status": "success", "data": addresses})
-}
-
-func newGeoHandler(router *gin.RouterGroup, g geoUsecase) {
-
-	h := GeoHandler{geoUsecase: g}
-
-	geoGroup := router.Group("/geo")
-	{
-		geoGroup.POST("/clients/:client_id/addresses", h.AddClientAddress)
-		geoGroup.PUT("/clients/:client_id/addresses/:address_id", h.UpdateClientAddress)
-		geoGroup.GET("/clients/:client_id/addresses", h.GetClientAddresses)
-		geoGroup.GET("/chefs/:chef_id/address", h.GetChefAddress)
-		geoGroup.POST("/chefs/:chef_id/address", h.UpdateOrPostChefAddress)
-		geoGroup.GET("/search/chefs-near-client-address/:client_address_id", h.GetChefsAddrByRange)
-		geoGroup.GET("/search/clients-near-chef/:chef_id", h.GetClientsAddrByRange)
-	}
 }

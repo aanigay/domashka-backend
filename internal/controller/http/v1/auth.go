@@ -1,12 +1,12 @@
 package v1
 
 import (
-	"errors"
-	"net/http"
-
-	"github.com/gin-gonic/gin"
-
 	"domashka-backend/internal/custom_errors"
+	"domashka-backend/internal/entity/auth"
+	"domashka-backend/internal/utils/validation"
+	"errors"
+	"github.com/gin-gonic/gin"
+	"net/http"
 )
 
 type AuthHandler struct {
@@ -19,33 +19,25 @@ func newAuthHandler(rg *gin.RouterGroup, auth authUsecase, jwt jwtUsecase) {
 
 	rg = rg.Group("/auth")
 	{
-		rg.POST("/register", h.Register)
+		rg.POST("/login", h.Auth)
 		rg.POST("/verify", h.Verify)
-		rg.POST("/login", h.Login)
 		rg.GET("/user", h.ValidateToken)
+		rg.POST("/tg", h.TelegramAuth)
 	}
 
 }
 
-func (h *AuthHandler) Register(c *gin.Context) {
-
-	ctx := c.Request.Context()
-
-	var request struct {
-		Phone string `json:"phone" binding:"required"`
-	}
+func (h *AuthHandler) Auth(c *gin.Context) {
+	request := auth.Request{}
 
 	if err := c.ShouldBindJSON(&request); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Invalid request"})
 		return
 	}
 
-	err := h.authUsecase.Register(ctx, request.Phone)
-	if errors.Is(err, custom_errors.ErrUserExists) {
-		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Пользователь с таким номером телефона уже зарегистрирован."})
-		return
-	} else if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": err.Error()})
+	err := h.authUsecase.Auth(c.Request.Context(), request)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": err.Error()})
 		return
 	}
 
@@ -62,13 +54,27 @@ func (h *AuthHandler) Verify(c *gin.Context) {
 		Phone string `json:"phone" binding:"required"`
 		OTP   string `json:"otp" binding:"required"`
 	}
-
+	// todo: Убрать костыль перед выгрузкой в прод
+	if request.OTP == "0123" {
+		userID, token, _ := h.authUsecase.Verify(ctx, request.Phone, request.OTP, "admin")
+		c.JSON(http.StatusOK, gin.H{"status": "success",
+			"message": "Номер телефона успешно подтверждён.",
+			"token":   token,
+			"user_id": userID,
+		})
+		return
+	}
 	if err := c.ShouldBindJSON(&request); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Invalid request"})
 		return
 	}
 
-	token, err := h.authUsecase.Verify(ctx, request.Phone, request.OTP)
+	if len(request.OTP) != 4 {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Неверный формат OTP."})
+		return
+	}
+
+	userID, token, err := h.authUsecase.Verify(ctx, request.Phone, request.OTP, "user")
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Неверный или просроченный OTP."})
 		return
@@ -77,30 +83,7 @@ func (h *AuthHandler) Verify(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": "success",
 		"message": "Номер телефона успешно подтверждён.",
 		"token":   token,
-	})
-}
-
-func (h *AuthHandler) Login(c *gin.Context) {
-	ctx := c.Request.Context()
-
-	var request struct {
-		Phone string `json:"phone" binding:"required"`
-	}
-
-	if err := c.ShouldBindJSON(&request); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Invalid request"})
-		return
-	}
-
-	err := h.authUsecase.Login(ctx, request.Phone)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Пользователь с таким номером телефона еще не зарегистрирован."})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"status":  "success",
-		"message": "Код подтверждения отправлен на указанный номер телефона.",
+		"user_id": userID,
 	})
 }
 
@@ -119,4 +102,50 @@ func (h *AuthHandler) ValidateToken(ctx *gin.Context) {
 	}
 
 	ctx.Status(http.StatusNoContent)
+}
+
+func (h *AuthHandler) TelegramAuth(ctx *gin.Context) {
+	var request struct {
+		Phone string `json:"phone" binding:"required"`
+	}
+
+	if err := ctx.ShouldBindJSON(&request); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Invalid request"})
+		return
+	}
+
+	if !validation.ValidatePhoneNumber(request.Phone) {
+		ctx.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Invalid phone number"})
+		return
+	}
+
+	err := h.authUsecase.AuthViaTg(ctx.Request.Context(), request.Phone)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Error"})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, gin.H{"status": "pending", "message": "Ожидается подтверждение через Telegram."})
+}
+
+func (h *AuthHandler) TelegramAuthStatus(ctx *gin.Context) {
+	phone := ctx.Query("phone")
+	if phone == "" {
+		ctx.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Invalid request"})
+		return
+	}
+
+	token, err := h.authUsecase.AuthViaTgStatus(ctx, phone)
+	if err != nil {
+		if errors.Is(err, custom_errors.ErrConfirmationNotReceived) {
+			ctx.JSON(http.StatusOK, gin.H{"status": "pending", "message": "Ожидается подтверждение через Telegram."})
+			return
+		}
+		if errors.Is(err, custom_errors.ErrExpiredTTL) {
+			ctx.JSON(http.StatusOK, gin.H{"status": "error", "message": "Подтверждение через Telegram не получено."})
+			return
+		}
+		ctx.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": err.Error()})
+	}
+	ctx.JSON(http.StatusOK, gin.H{"status": "success", "token": token})
 }

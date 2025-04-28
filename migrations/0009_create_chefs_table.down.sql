@@ -1,0 +1,2 @@
+DROP TABLE IF EXISTS chef_ratings;
+DROP TABLE IF EXISTS chefs;

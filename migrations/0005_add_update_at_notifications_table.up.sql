@@ -1,2 +1,2 @@
-ALTER TABLE notifications
-    ADD COLUMN updated_at TEXT;
+ALTER TABLE IF EXISTS notifications
+    ADD COLUMN IF NOT EXISTS updated_at TEXT;

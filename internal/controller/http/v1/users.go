@@ -1,7 +1,9 @@
 package v1
 
 import (
+	"errors"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -24,7 +26,7 @@ func newUsersHandler(rg *gin.RouterGroup, log logger, usecase usersUsecase) {
 	rg = rg.Group("/users")
 	{
 		rg.POST("/create", u.Create)
-		rg.GET("/:id", u.GetByID)
+		rg.GET("/:id", u.GetProfile)
 		rg.PUT("/:id", u.Update)
 		rg.DELETE("/:id", u.Delete)
 	}
@@ -47,14 +49,6 @@ type CreateRequest struct {
 	Birthday         *time.Time `json:"birthday,omitempty"`      // День рождения (опционально)
 }
 
-// Create godoc
-// @Summary      Создание пользователя
-// @Description  Создание пользователя
-// @Tags         users
-// @Accept       json
-// @Produce      json
-// @Param        request   body      CreateRequest  true  "body"
-// @Router       /users/create [post]
 func (u *usersHandler) Create(c *gin.Context) {
 	ctx := c.Request.Context()
 
@@ -66,7 +60,7 @@ func (u *usersHandler) Create(c *gin.Context) {
 		return
 	}
 
-	id, err := u.usecase.Create(c.Request.Context(), &usersEntity.User{
+	err := u.usecase.Create(c.Request.Context(), &usersEntity.User{
 		Username:         r.Username,
 		Alias:            r.Alias,
 		FirstName:        r.FirstName,
@@ -87,24 +81,19 @@ func (u *usersHandler) Create(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "User created successfully", "user_id": id})
+	c.JSON(http.StatusOK, gin.H{"message": "User created successfully"})
 }
 
-// GetByID godoc
-// @Summary      Получение пользователя
-// @Description  Получение пользователя по ID
-// @Tags         users
-// @Accept       json
-// @Produce      json
-// @Param        id   path      string  true  "id"
-// @Router       /users/{id} [get]
 func (u *usersHandler) GetByID(c *gin.Context) {
 	ctx := c.Request.Context()
 
-	id := c.Param("id")
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		// TODO: handle error
+	}
 	user, err := u.usecase.GetByID(ctx, id)
 	if err != nil {
-		if err == custom_errors.ErrUserNotFound {
+		if errors.Is(err, custom_errors.ErrUserNotFound) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
 		} else {
 			u.log.Error(ctx, err)
@@ -133,19 +122,13 @@ type UpdateRequest struct {
 
 }
 
-// Update godoc
-// @Summary      Обновление пользователя
-// @Description  Обновление данных пользователя по ID
-// @Tags         users
-// @Accept       json
-// @Produce      json
-// @Param        id   path      string  true  "id"
-// @Param        request   body      UpdateRequest  true  "body"
-// @Router       /users/{id} [put]
 func (u *usersHandler) Update(c *gin.Context) {
 	ctx := c.Request.Context()
 
-	id := c.Param("id")
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		// TODO: handle error
+	}
 
 	r := UpdateRequest{}
 
@@ -154,7 +137,7 @@ func (u *usersHandler) Update(c *gin.Context) {
 		return
 	}
 
-	err := u.usecase.Update(ctx, id, usersEntity.User{
+	err = u.usecase.Update(ctx, id, usersEntity.User{
 		Alias:            r.Alias,
 		FirstName:        r.FirstName,
 		SecondName:       r.SecondName,
@@ -179,20 +162,15 @@ func (u *usersHandler) Update(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "User updated successfully"})
 }
 
-// Delete godoc
-// @Summary      Удаление пользователя
-// @Description  Удаление пользователя по ID
-// @Tags         users
-// @Accept       json
-// @Produce      json
-// @Param        id   path      string  true  "id"
-// @Router       /users/{id} [delete]
 func (u *usersHandler) Delete(c *gin.Context) {
 	ctx := c.Request.Context()
 
-	id := c.Param("id")
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		// TODO: handle error
+	}
 
-	err := u.usecase.Delete(ctx, id)
+	err = u.usecase.Delete(ctx, id)
 	if err != nil {
 		u.log.Error(ctx, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete user"})
@@ -200,4 +178,178 @@ func (u *usersHandler) Delete(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "User deleted successfully"})
+}
+
+func (u *usersHandler) GetProfile(c *gin.Context) {
+	mock := `
+{
+  "status": "success",
+  "data": {
+    "user_id": 1,
+    "name": "Ульяна",
+    "phone_number": "+7(925) 040 12-34",
+    "last_order": {
+      "label": "Заказ в субботу, 14:30",
+      "dishes": [
+        {
+          "dish_id": 301,
+          "title": "Цезарь с курицей и салатом айсберг",
+          "image_url": "https://example.com/images/caesar.jpg",
+          "rating": 4.7,
+          "details": "S, без грибов и лука и еще какой то хуйни",
+          "price_from": {
+            "value": "320",
+            "currency": "RUB"
+          }
+        },
+        {
+          "dish_id": 302,
+          "title": "Греческий салат",
+          "image_url": "https://example.com/images/greek_salad.jpg",
+          "rating": 4.5,
+          "price_from": {
+            "value": "2 x 250",
+            "currency": "RUB"
+          }
+        }
+      ],
+      "chef": {
+        "id": 1,
+        "name": "Раиса Виноградова",
+        "avatar_url": "https://example.com/images/chef_raisa.jpg",
+        "rating": 4.7,
+        "reviews_count": 34
+      },
+      "review": {
+        "can_write_review": true,
+		"rating": null, 
+		"comment": null
+      }
+    },
+    "favorite_chefs": [
+      {
+        "id": 2,
+        "name": "Александр Иванов",
+        "avatar_url": "https://example.com/images/chef_raisa.jpg",
+        "rating": 4.5,
+        "reviews_count": 12
+      },
+      {
+        "id": 3,
+        "name": "Елена Петрова",
+        "avatar_url": "https://example.com/images/chef_raisa.jpg",
+        "rating": 4.2,
+        "reviews_count": 5
+      }
+    ],
+    "stop_list_of_ingredients" : [
+      {
+        "id": 1,
+        "name": "Морковь",
+        "image_url": "/images/carrot.jpg",
+        "stop": true
+      },
+      {
+        "id": 2,
+        "name": "Картошка",
+        "image_url": "/images/potato.jpg",
+        "stop": false
+      },
+      {
+        "id": 3,
+        "name": "Свекла",
+        "image_url": "/images/cabbage.jpg",
+        "stop": true
+      },
+      {
+        "id": 4,
+        "name": "Орехи",
+        "image_url": "/images/carrot.jpg",
+        "stop": true
+      }
+    ],
+    "orders": [
+      {
+        "label": "Заказ в субботу, 14:30",
+        "dishes": [
+          {
+            "dish_id": 301,
+            "title": "Цезарь с курицей и салатом айсберг",
+            "image_url": "https://example.com/images/caesar.jpg",
+            "rating": 4.7,
+            "details": "S, без грибов и лука и еще какой то хуйни",
+            "price_from": {
+              "value": "320",
+              "currency": "RUB"
+            }
+          },
+          {
+            "dish_id": 302,
+            "title": "Греческий салат",
+            "image_url": "https://example.com/images/greek_salad.jpg",
+            "details": null,
+            "rating": 4.5,
+            "price_from": {
+              "value": "2 x 250",
+              "currency": "RUB"
+            }
+          }
+        ],
+        "chef": {
+          "id": 1,
+          "name": "Раиса Виноградова",
+          "avatar_url": "https://example.com/images/chef_raisa.jpg",
+          "rating": 4.7,
+          "reviews_count": 34
+        },
+        "review": {
+          "can_write_review": false,
+          "rating": 4,
+          "comment": "Отличный блюдо"
+        }
+      },
+      {
+        "label": "Заказ в субботу, 14:30",
+        "dishes": [
+          {
+            "dish_id": 301,
+            "title": "Цезарь с курицей и салатом айсберг",
+            "image_url": "/images/caesar.jpg",
+            "rating": 4.7,
+            "details": "S, без грибов и лука и еще какой то хуйни",
+            "price_from": {
+              "value": "320",
+              "currency": "RUB"
+            }
+          },
+          {
+            "dish_id": 302,
+            "title": "Греческий салат",
+            "image_url": "images/greek_salad.jpg",
+            "rating": 4.5,
+            "details": null,
+            "price_from": {
+              "value": "2 x 250",
+              "currency": "RUB"
+            }
+          }
+        ],
+        "chef": {
+          "id": 1,
+          "name": "Раиса Виноградова",
+          "avatar_url": "/images/chef_raisa.jpg",
+          "rating": 4.7,
+          "reviews_count": 34
+        },
+        "review": {
+          "can_write_review": false,
+          "rating": 5,
+          "comment": "Отличный повар, люблю его <3"
+        }
+      }
+    ]
+  }
+}
+`
+	c.Data(200, "application/json; charset=utf-8", []byte(mock))
 }

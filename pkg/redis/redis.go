@@ -55,6 +55,17 @@ func (r *Redis) Close() error {
 	return r.client.Close()
 }
 
+func (r *Redis) IsExpired(key string) (bool, error) {
+	ttl, err := r.client.TTL(r.ctx, key).Result()
+	if err != nil {
+		return false, err
+	}
+	if ttl == -2 {
+		return true, nil
+	}
+	return false, nil
+}
+
 func (r *Redis) Ping() error {
 	_, err := r.client.Ping(r.ctx).Result()
 	return err

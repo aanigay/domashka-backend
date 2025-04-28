@@ -4,6 +4,7 @@ import (
 	"domashka-backend/config"
 	"github.com/golang-jwt/jwt"
 	"github.com/google/uuid"
+	"strconv"
 	"time"
 )
 
@@ -17,7 +18,7 @@ func New(cfg *config.JWTConfig) *UseCase {
 	}
 }
 
-func (u *UseCase) ValidateJWT(tokenString string) (string, error) {
+func (u *UseCase) ValidateJWT(tokenString string) (map[string]interface{}, error) {
 	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, jwt.ErrSignatureInvalid
@@ -26,24 +27,25 @@ func (u *UseCase) ValidateJWT(tokenString string) (string, error) {
 	})
 
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
-		tokenUUID := claims["uuid"].(string)
-		return tokenUUID, nil
+		return claims, nil
 	}
 
-	return "", jwt.ErrSignatureInvalid
+	return nil, jwt.ErrSignatureInvalid
 }
 
-func (u *UseCase) GenerateJWT() (string, error) {
+func (u *UseCase) GenerateJWT(userID int64, role string) (string, error) {
 	tokenUUID := uuid.New()
 
 	claims := jwt.MapClaims{
-		"uuid": tokenUUID.String(),
-		"exp":  time.Now().Add(u.cfg.Exp).Unix(),
-		"iat":  time.Now().Unix(),
+		"uuid":    tokenUUID.String(),
+		"exp":     time.Now().Add(u.cfg.Exp).Unix(),
+		"iat":     time.Now().Unix(),
+		"role":    role,
+		"user_id": strconv.FormatInt(userID, 10),
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)

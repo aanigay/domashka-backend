@@ -1,0 +1,9 @@
+CREATE TABLE IF NOT EXISTS shifts
+(
+    id BIGINT PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
+    chef_id BIGINT NOT NULL,
+    is_active BOOLEAN NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT now(),
+    closed_at TIMESTAMP,
+    total_profit NUMERIC NOT NULL DEFAULT 0
+);

@@ -1,6 +1,6 @@
 CREATE TABLE IF NOT EXISTS users
 (
-    id                UUID PRIMARY KEY                                 DEFAULT gen_random_uuid(),                   -- Уникальный идентификатор
+    id                BIGINT PRIMARY KEY GENERATED ALWAYS AS IDENTITY,                                              -- Уникальный идентификатор
     username          VARCHAR(256) UNIQUE                     NOT NULL,                                             -- Уникальный логин
     alias             VARCHAR(256)                            NOT NULL,                                             -- Полное имя (ФИО)
     first_name        VARCHAR(256)                            NOT NULL,                                             -- Имя

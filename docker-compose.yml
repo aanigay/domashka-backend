@@ -15,7 +15,7 @@ services:
     volumes:
       - ./logs:/app/logs
     ports:
-      - "9093:9093"
+      - "9093:9092"
     environment:
       - DB_HOST=postgres
       - DB_PORT=5432
@@ -31,7 +31,7 @@ services:
     restart: always
 
   postgres:
-    image: postgres:15
+    image: postgis/postgis:17-3.5
     container_name: postgres
     networks:
       - domashka.local

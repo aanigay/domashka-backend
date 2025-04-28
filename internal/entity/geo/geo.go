@@ -1,12 +1,18 @@
 package geo
 
 type Address struct {
-	Latitude    float64 `json:"latitude"`
-	Longitude   float64 `json:"longitude"`
-	AddressType string  `json:"address_type"`
-	Name        string  `json:"name"`
-	Address     string  `json:"geo"`
-	Comment     string  `json:"comment"`
+	ID             int64   `json:"id"`
+	Latitude       float64 `json:"latitude"`
+	Longitude      float64 `json:"longitude"`
+	AddressType    string  `json:"address_type"`
+	Name           string  `json:"name"`
+	Address        string  `json:"address"`
+	Comment        string  `json:"comment"`
+	FlatNumber     *string `json:"flat_number,omitempty"`
+	FloorNumber    *string `json:"floor_number,omitempty"`
+	EntranceNumber *string `json:"entrance_number,omitempty"`
+	IntercomNumber *string `json:"intercom_number,omitempty"`
+	CourierComment *string `json:"courier_comment,omitempty"`
 }
 
 type Chef struct {

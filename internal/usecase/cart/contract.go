@@ -3,15 +3,24 @@ package cart
 import (
 	"context"
 
-	entities "domashka-backend/internal/entity/carts"
+	cartentity "domashka-backend/internal/entity/cart"
+	dishentity "domashka-backend/internal/entity/dishes"
 )
 
-type cartRepo interface {
-	CreateCart(ctx context.Context, cart *entities.Cart) error
-	GetCartByUserID(ctx context.Context, userID string) (*entities.Cart, error)
-	GetCartItemsByUserID(ctx context.Context, userID string) ([]entities.CartItem, error)
-	ClearCartByUserID(ctx context.Context, userID string) error
-	AddCartItem(ctx context.Context, cartItem *entities.CartItem) (*string, error)
-	UpdateCartItem(ctx context.Context, cartItem *entities.CartItem) (*string, error)
-	DeleteCartItem(ctx context.Context, cartItemID string) error
+type CartRepository interface {
+	AddItem(
+		ctx context.Context,
+		userID int64,
+		dish dishentity.Dish,
+		sizeID int64,
+		addedIngredients []int64,
+		removedIngredients []int64,
+		notes string,
+	) (cartItemID int64, err error)
+	RemoveItem(ctx context.Context, cartItemID int64) error
+	GetCartItems(ctx context.Context, userID int64) ([]cartentity.CartItem, error)
+	GetCartItemsByOrderID(ctx context.Context, orderID int64) ([]cartentity.CartItem, error)
+	Clear(ctx context.Context, userID int64) error
+	IncrementCartItemQuantity(ctx context.Context, cartItemID int64) (int32, error)
+	DecrementCartItemQuantity(ctx context.Context, cartItemID int64) (int32, error)
 }
