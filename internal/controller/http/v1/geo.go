@@ -62,7 +62,7 @@ func (h *GeoHandler) GetAddressDetails(ctx *gin.Context) {
 func (h *GeoHandler) AddClientAddress(ctx *gin.Context) {
 	var address geoEntity.Address
 	type requestBody struct {
-		Address   string  `json:"address"`
+		Address   *string `json:"address"`
 		Latitude  float64 `json:"latitude"`
 		Longitude float64 `json:"longitude"`
 	}

@@ -5,6 +5,8 @@ import (
 	addressentity "domashka-backend/internal/entity/geo"
 )
 
+//go:generate mockgen -source=contract.go -destination contract_mocks_test.go -package $GOPACKAGE
+
 type GeoRepository interface {
 	AddClientAddress(ctx context.Context, clientID int, address addressentity.Address) error
 	AddChefAddress(ctx context.Context, chefID int, address addressentity.Address) error

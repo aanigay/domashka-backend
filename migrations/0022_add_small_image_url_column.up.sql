@@ -1,0 +1,2 @@
+ALTER TABLE IF EXISTS chefs
+    ADD COLUMN IF NOT EXISTS small_image_url TEXT DEFAULT '';

@@ -1,0 +1,169 @@
+
+{
+  "status": "success",
+  "data": {
+    "user_id": 1,
+    "name": "Ульяна",
+    "phone_number": "+7(925) 040 12-34",
+    "last_order": {
+      "label": "Заказ в субботу, 14:30",
+      "dishes": [
+        {
+          "dish_id": 301,
+          "title": "Цезарь с курицей и салатом айсберг",
+          "image_url": "https://example.com/images/caesar.jpg",
+          "rating": 4.7,
+          "details": "S, без грибов и лука и еще какой то хуйни",
+          "price_from": {
+            "value": "320",
+            "currency": "RUB"
+          }
+        },
+        {
+          "dish_id": 302,
+          "title": "Греческий салат",
+          "image_url": "https://example.com/images/greek_salad.jpg",
+          "rating": 4.5,
+          "price_from": {
+            "value": "2 x 250",
+            "currency": "RUB"
+          }
+        }
+      ],
+      "chef": {
+        "id": 1,
+        "name": "Раиса Виноградова",
+        "avatar_url": "https://example.com/images/chef_raisa.jpg",
+        "rating": 4.7,
+        "reviews_count": 34
+      },
+      "review": {
+        "can_write_review": true,
+		"rating": null,
+		"comment": null
+      }
+    },
+    "favorite_chefs": [
+      {
+        "id": 2,
+        "name": "Александр Иванов",
+        "avatar_url": "https://example.com/images/chef_raisa.jpg",
+        "rating": 4.5,
+        "reviews_count": 12
+      },
+      {
+        "id": 3,
+        "name": "Елена Петрова",
+        "avatar_url": "https://example.com/images/chef_raisa.jpg",
+        "rating": 4.2,
+        "reviews_count": 5
+      }
+    ],
+    "stop_list_of_ingredients" : [
+      {
+        "id": 1,
+        "name": "Морковь",
+        "image_url": "/images/carrot.jpg",
+        "stop": true
+      },
+      {
+        "id": 2,
+        "name": "Картошка",
+        "image_url": "/images/potato.jpg",
+        "stop": false
+      },
+      {
+        "id": 3,
+        "name": "Свекла",
+        "image_url": "/images/cabbage.jpg",
+        "stop": true
+      },
+      {
+        "id": 4,
+        "name": "Орехи",
+        "image_url": "/images/carrot.jpg",
+        "stop": true
+      }
+    ],
+    "orders": [
+      {
+        "label": "Заказ в субботу, 14:30",
+        "dishes": [
+          {
+            "dish_id": 301,
+            "title": "Цезарь с курицей и салатом айсберг",
+            "image_url": "https://example.com/images/caesar.jpg",
+            "rating": 4.7,
+            "details": "S, без грибов и лука и еще какой то хуйни",
+            "price_from": {
+              "value": "320",
+              "currency": "RUB"
+            }
+          },
+          {
+            "dish_id": 302,
+            "title": "Греческий салат",
+            "image_url": "https://example.com/images/greek_salad.jpg",
+            "details": null,
+            "rating": 4.5,
+            "price_from": {
+              "value": "2 x 250",
+              "currency": "RUB"
+            }
+          }
+        ],
+        "chef": {
+          "id": 1,
+          "name": "Раиса Виноградова",
+          "avatar_url": "https://example.com/images/chef_raisa.jpg",
+          "rating": 4.7,
+          "reviews_count": 34
+        },
+        "review": {
+          "can_write_review": false,
+          "rating": 4,
+          "comment": "Отличный блюдо"
+        }
+      },
+      {
+        "label": "Заказ в субботу, 14:30",
+        "dishes": [
+          {
+            "dish_id": 301,
+            "title": "Цезарь с курицей и салатом айсберг",
+            "image_url": "/images/caesar.jpg",
+            "rating": 4.7,
+            "details": "S, без грибов и лука и еще какой то хуйни",
+            "price_from": {
+              "value": "320",
+              "currency": "RUB"
+            }
+          },
+          {
+            "dish_id": 302,
+            "title": "Греческий салат",
+            "image_url": "images/greek_salad.jpg",
+            "rating": 4.5,
+            "details": null,
+            "price_from": {
+              "value": "2 x 250",
+              "currency": "RUB"
+            }
+          }
+        ],
+        "chef": {
+          "id": 1,
+          "name": "Раиса Виноградова",
+          "avatar_url": "/images/chef_raisa.jpg",
+          "rating": 4.7,
+          "reviews_count": 34
+        },
+        "review": {
+          "can_write_review": false,
+          "rating": 5,
+          "comment": "Отличный повар, люблю его <3"
+        }
+      }
+    ]
+  }
+}

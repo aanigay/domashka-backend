@@ -1,0 +1,167 @@
+version: "3.8"
+
+networks:
+  domashka.local:
+    driver: bridge
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: go-app
+    networks:
+      - domashka.local
+    volumes:
+      - ./logs:/app/logs
+    ports:
+      - "9093:9094"
+    environment:
+      - DB_HOST=89.223.126.243
+      - DB_PORT=5432
+      - DB_USER=domashka_user
+      - DB_PASSWORD=r9_XOSD3A9
+      - DB_NAME=domashka
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - KAFKA_URL=kafka:9092
+    depends_on:
+      - redis
+      - kafka
+    restart: always
+  dish-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile-dish-reviews-worker
+    container_name: dish-worker
+    networks:
+      - domashka.local
+    volumes:
+      - ./logs:/app/logs
+    environment:
+      - DB_HOST=89.223.126.243
+      - DB_PORT=5432
+      - DB_USER=domashka_user
+      - DB_PASSWORD=r9_XOSD3A9
+      - DB_NAME=domashka
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - KAFKA_URL=kafka:9092
+    depends_on:
+      - postgres
+      - redis
+      - kafka
+    restart: always
+  chef-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile-chef-reviews-worker
+    container_name: chef-worker
+    networks:
+      - domashka.local
+    volumes:
+      - ./logs:/app/logs
+    environment:
+      - DB_HOST=89.223.126.243
+      - DB_PORT=5432
+      - DB_USER=domashka_user
+      - DB_PASSWORD=r9_XOSD3A9
+      - DB_NAME=domashka
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - KAFKA_URL=kafka:9092
+    depends_on:
+      - postgres
+      - redis
+      - kafka
+    restart: always
+
+  redis:
+    image: redis:7
+    container_name: redis
+    networks:
+      - domashka.local
+    ports:
+      - "6379:6379"
+    restart: always
+
+  zookeeper:
+    image: wurstmeister/zookeeper
+    container_name: zookeeper
+    networks:
+      - domashka.local
+    ports:
+      - "2181:2181"
+    restart: always
+
+  kafka:
+    image: wurstmeister/kafka
+    container_name: kafka
+    networks:
+      - domashka.local
+    ports:
+      - "9095:9095"
+    environment:
+      - KAFKA_BROKER_ID=1
+      - KAFKA_ZOOKEEPER_CONNECT=zookeeper:2181
+      - KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT
+      - KAFKA_ADVERTISED_LISTENERS=INTERNAL://kafka:9092,EXTERNAL://localhost:9095
+      - KAFKA_LISTENERS=INTERNAL://0.0.0.0:9092,EXTERNAL://0.0.0.0:9095
+      - KAFKA_INTER_BROKER_LISTENER_NAME=INTERNAL
+      - KAFKA_CREATE_TOPICS=dish_reviews:1:1,chef_reviews:1:1
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      - zookeeper
+    restart: always
+  prometheus:
+    image: prom/prometheus
+    container_name: prometheus
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - "9091:9090"
+    networks:
+      - domashka.local
+
+  grafana:
+    image: grafana/grafana
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    networks:
+      - domashka.local
+
+  loki:
+    image: grafana/loki
+    container_name: loki
+    ports:
+      - "3100:3100"
+    networks:
+      - domashka.local
+
+  promtail:
+    image: grafana/promtail
+    container_name: promtail
+    volumes:
+      - /var/lib/docker/containers:/var/lib/docker/containers
+      - ./promtail-config.yml:/etc/promtail/config.yml
+    networks:
+      - domashka.local
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.97.0
+    container_name: otel-collector
+    volumes:
+      - ./collector-config.yml:/etc/otel/config.yaml
+    command: [ "--config=/etc/otel/config.yaml" ]
+    ports:
+      - "4317:4317" # OTLP gRPC порт
+      - "4318:4318" # OTLP HTTP порт
+      - "8889:8889"
+    networks:
+      - domashka.local
+
+
+volumes:
+  pgdata:

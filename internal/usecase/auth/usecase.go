@@ -91,7 +91,7 @@ func (u *UseCase) Auth(ctx context.Context, req auth.Request) error {
 			log.Printf("DEBUG: Пользователь с номером %s не найден, запускаем регистрацию", req.Phone)
 			return u.register(ctx, req.Phone)
 		}
-		log.Printf("DEBUG: Пользователь: %s", user)
+		log.Printf("DEBUG: Пользователь: %v", user)
 		log.Printf("DEBUG: Ошибка получения пользователя по номеру %s: %v", req.Phone, err)
 		return err
 	}
@@ -159,21 +159,25 @@ func (u *UseCase) register(ctx context.Context, phone string) error {
 	return nil
 }
 
-func (u *UseCase) Verify(ctx context.Context, phone string, otp string, role string) (userID int64, token string, err error) {
+func (u *UseCase) Verify(ctx context.Context, phone string, otp string, role string) (userID int64, chefID *int64, token string, err error) {
 	isValid, err := u.validateOTP(phone, otp)
 	if err != nil || !isValid {
-		return 0, "", fmt.Errorf("invalid or expired OTP")
+		return 0, nil, "", fmt.Errorf("invalid or expired OTP")
 	}
 	user, err := u.usersRepo.GetByPhone(ctx, phone)
 	if err != nil {
-		return 0, "", err
+		return 0, nil, "", err
 	}
-	token, err = u.jwt.GenerateJWT(user.ID, role)
+	chefID, _, err = u.usersRepo.CheckIfUserIsChef(ctx, user.ID)
 	if err != nil {
-		return 0, "", err
+		return 0, nil, "", err
+	}
+	token, err = u.jwt.GenerateJWT(user.ID, chefID, role)
+	if err != nil {
+		return 0, nil, "", err
 	}
 
-	return user.ID, token, nil
+	return user.ID, chefID, token, nil
 }
 
 func (u *UseCase) login(ctx context.Context, user *userentity.User) error {

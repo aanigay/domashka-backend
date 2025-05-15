@@ -4,8 +4,10 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"golang.org/x/sync/errgroup"
@@ -18,21 +20,25 @@ import (
 type dishesHandler struct {
 	dishesUsecase dishesUsecase
 	chefUsecase   chefUsecase
+	usersUsecase  usersUsecase
 }
 
 // NewDishesHandler
 // TODO:
 // (не крит) Разделить инициализацию и регистрацию на отдельные функции,
 // то есть сделать отдельные функции для добавления роутов
-func NewDishesHandler(rg *gin.RouterGroup, dishesUsecase dishesUsecase, chefUsecase chefUsecase) {
+func NewDishesHandler(rg *gin.RouterGroup, dishesUsecase dishesUsecase, chefUsecase chefUsecase, usersUsecase usersUsecase) {
 	d := dishesHandler{
 		dishesUsecase: dishesUsecase,
 		chefUsecase:   chefUsecase,
+		usersUsecase:  usersUsecase,
 	}
 
 	rg = rg.Group("/dish")
 	{
 		rg.GET("/:dishId", d.getDishDetail)
+		rg.POST("/upload/image/:dishId", d.UploadDishImage)
+		rg.POST("/ingredients/upload/image/:ingredientId", d.UploadIngredientImage)
 	}
 }
 
@@ -51,6 +57,7 @@ type data struct {
 	Ingredients   []ingredient  `json:"ingredients"`
 	Nutrition     Nutrition     `json:"nutrition"`
 	RelatedDishes []dishSnippet `json:"related_dishes"`
+	IsFavorite    bool          `json:"is_favorite"`
 }
 
 type Chef struct {
@@ -58,6 +65,7 @@ type Chef struct {
 	Name         string  `json:"name"`
 	Rating       float32 `json:"rating"`
 	ReviewsCount int32   `json:"reviews_count"`
+	AvatarURL    string  `json:"avatar_url"`
 }
 
 type size struct {
@@ -82,6 +90,7 @@ type ingredient struct {
 	Name        string `json:"name"`
 	IsAllergen  bool   `json:"is_allergen"`
 	IsRemovable bool   `json:"is_removable"`
+	ImageURL    string `json:"image_url"`
 }
 
 type Nutrition struct {
@@ -201,14 +210,13 @@ func (h *dishesHandler) getDishDetail(c *gin.Context) {
 	})
 	var relatedDishes []dishEntity.Dish
 	g.Go(func() error {
-		relatedDishes, err = h.dishesUsecase.GetDishesByChefID(ctx2, dish.ChefID)
+		relatedDishes, err = h.dishesUsecase.GetDishesByChefID(ctx2, dish.ChefID, 6)
 		if err != nil {
 			return err
 		}
 		return nil
 	})
 	if err = g.Wait(); err != nil {
-
 		c.JSON(http.StatusInternalServerError, errorResponse{
 			Status: "error",
 			Err: errorMessage{
@@ -222,6 +230,9 @@ func (h *dishesHandler) getDishDetail(c *gin.Context) {
 
 	relatedDishesResponse := make([]dishSnippet, 0, len(relatedDishes))
 	for _, relatedDish := range relatedDishes {
+		if relatedDish.ID == dishID {
+			continue
+		}
 		price, err := h.dishesUsecase.GetMinimalPriceByDishID(ctx, relatedDish.ID)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, errorResponse{
@@ -268,6 +279,7 @@ func (h *dishesHandler) getDishDetail(c *gin.Context) {
 			Name:        val.Name,
 			IsAllergen:  val.IsAllergen,
 			IsRemovable: val.IsRemovable,
+			ImageURL:    val.ImageURL,
 		})
 	}
 
@@ -284,6 +296,7 @@ func (h *dishesHandler) getDishDetail(c *gin.Context) {
 				Name:         chef.Name,
 				Rating:       pointers.From(chef.Rating),
 				ReviewsCount: pointers.From(chef.ReviewsCount),
+				AvatarURL:    chef.SmallImageURL,
 			},
 			Sizes:       sizesResponse,
 			Ingredients: ingredientsResponse,
@@ -299,5 +312,140 @@ func (h *dishesHandler) getDishDetail(c *gin.Context) {
 			RelatedDishes: relatedDishesResponse,
 		},
 	}
+	userIDstr := c.GetString("user_id")
+	userID, err := strconv.ParseInt(userIDstr, 10, 64)
+	if userIDstr != "" && err == nil {
+		favs, err := h.usersUsecase.GetFavoritesDishesByUserID(ctx, userID)
+		if err != nil {
+			fmt.Println(err.Error())
+		} else {
+			if favs != nil {
+				for _, fav := range favs {
+					if fav.ID == dishID {
+						response.Data.IsFavorite = true
+						break
+					}
+				}
+			}
+		}
+	}
 	c.JSON(http.StatusOK, response)
+}
+
+func (h *dishesHandler) UploadIngredientImage(c *gin.Context) {
+	idStr := c.Param("ingredientId")
+	ingredientID, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"status":  "Неверный юзер айди",
+			"message": "Пожалуйста, авторизуйтесь заново.",
+		})
+		return
+	}
+	fileHeader, err := c.FormFile("image")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"status": "error",
+			"error":  gin.H{"code": 4001, "message": "Image file is required"},
+		})
+		return
+	}
+
+	// --- Проверка размера (≤5 МБ) ---
+	const maxImageSize = 5 << 20 // 5 MiB
+	if fileHeader.Size > maxImageSize {
+		c.JSON(http.StatusRequestEntityTooLarge, gin.H{
+			"status": "error",
+			"error":  gin.H{"code": 4002, "message": "File size exceeds 5MB"},
+		})
+		return
+	}
+
+	// --- Проверка формата файла ---
+	ext := strings.ToLower(filepath.Ext(fileHeader.Filename))
+	if ext != ".jpg" && ext != ".jpeg" && ext != ".png" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"status": "error",
+			"error":  gin.H{"code": 4001, "message": "Unsupported file format"},
+		})
+		return
+	}
+
+	imageURL, err := h.dishesUsecase.SetIngredientImage(c.Request.Context(), ingredientID, fileHeader)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"status": "error",
+			"error":  gin.H{"code": 5001, "message": "Could not save image"},
+		})
+		return
+	}
+
+	// --- Успешный ответ ---
+	c.JSON(http.StatusOK, gin.H{
+		"status": "success",
+		"data": gin.H{
+			"ingredient_id": ingredientID,
+			"image_url":     imageURL,
+			"uploaded_at":   time.Now().UTC().Format(time.RFC3339),
+		},
+	})
+}
+
+func (h *dishesHandler) UploadDishImage(c *gin.Context) {
+	idStr := c.Param("dishId")
+	dishID, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"status":  "Неверный юзер айди",
+			"message": "Пожалуйста, авторизуйтесь заново.",
+		})
+		return
+	}
+	fileHeader, err := c.FormFile("image")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"status": "error",
+			"error":  gin.H{"code": 4001, "message": "Image file is required"},
+		})
+		return
+	}
+
+	// --- Проверка размера (≤5 МБ) ---
+	const maxImageSize = 5 << 20 // 5 MiB
+	if fileHeader.Size > maxImageSize {
+		c.JSON(http.StatusRequestEntityTooLarge, gin.H{
+			"status": "error",
+			"error":  gin.H{"code": 4002, "message": "File size exceeds 5MB"},
+		})
+		return
+	}
+
+	// --- Проверка формата файла ---
+	ext := strings.ToLower(filepath.Ext(fileHeader.Filename))
+	if ext != ".jpg" && ext != ".jpeg" && ext != ".png" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"status": "error",
+			"error":  gin.H{"code": 4001, "message": "Unsupported file format"},
+		})
+		return
+	}
+
+	imageURL, err := h.dishesUsecase.SetDishImage(c.Request.Context(), dishID, fileHeader)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"status": "error",
+			"error":  gin.H{"code": 5001, "message": "Could not save image"},
+		})
+		return
+	}
+
+	// --- Успешный ответ ---
+	c.JSON(http.StatusOK, gin.H{
+		"status": "success",
+		"data": gin.H{
+			"ingredient_id": dishID,
+			"image_url":     imageURL,
+			"uploaded_at":   time.Now().UTC().Format(time.RFC3339),
+		},
+	})
 }

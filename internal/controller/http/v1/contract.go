@@ -12,6 +12,7 @@ import (
 	dishesEntity "domashka-backend/internal/entity/dishes"
 	geoEntity "domashka-backend/internal/entity/geo"
 	notifEntity "domashka-backend/internal/entity/notifications"
+	reviewsEntity "domashka-backend/internal/entity/reviews"
 	usersEntity "domashka-backend/internal/entity/users"
 )
 
@@ -21,7 +22,7 @@ type logger interface {
 
 type authUsecase interface {
 	Auth(ctx context.Context, req authEntity.Request) error
-	Verify(ctx context.Context, phone, otp, role string) (int64, string, error)
+	Verify(ctx context.Context, phone, otp, role string) (int64, *int64, string, error)
 	AuthViaTg(ctx context.Context, phoneNumber string) error
 	AuthViaTgStatus(ctx context.Context, phoneNumber string) (string, error)
 }
@@ -35,6 +36,8 @@ type usersUsecase interface {
 	GetByID(ctx context.Context, id int64) (*usersEntity.User, error)
 	Update(ctx context.Context, id int64, user usersEntity.User) error
 	Delete(ctx context.Context, id int64) error
+	GetFavoritesDishesByUserID(ctx context.Context, id int64) ([]dishesEntity.Dish, error)
+	GetFavoritesChefsByUserID(ctx context.Context, id int64) ([]chefEntity.Chef, error)
 }
 
 type geoUsecase interface {
@@ -61,22 +64,48 @@ type notificationUsecase interface {
 
 type dishesUsecase interface {
 	GetDishByID(ctx context.Context, dishID int64) (*dishesEntity.Dish, error)
-	GetDishesByChefID(ctx context.Context, chefID int64) ([]dishesEntity.Dish, error)
+	GetDishesByChefID(ctx context.Context, chefID int64, limit int) ([]dishesEntity.Dish, error)
+	GetAllDishesByChefID(ctx context.Context, chefID int64) ([]dishesEntity.Dish, error)
 	GetNutritionByDishID(ctx context.Context, dishID int64) (*dishesEntity.Nutrition, error)
 	GetDishSizesByDishID(ctx context.Context, dishID int64) ([]dishesEntity.Size, error)
 	GetIngredientsByDishID(ctx context.Context, dishID int64) ([]dishesEntity.Ingredient, error)
 	GetMinimalPriceByDishID(ctx context.Context, dishID int64) (*dishesEntity.Price, error)
 	GetTopDishes(ctx context.Context, limit int) ([]dishesEntity.Dish, error)
+	SetDishImage(ctx context.Context, dishID int64, image *multipart.FileHeader) (string, error)
+	SetIngredientImage(ctx context.Context, dishID int64, image *multipart.FileHeader) (string, error)
+	GetCategoryTitleByDishID(ctx context.Context, dishID int64) (string, error)
+	GetAll(ctx context.Context) ([]dishesEntity.Dish, error)
+	Create(
+		ctx context.Context,
+		dish *dishesEntity.Dish,
+		nutrition *dishesEntity.Nutrition,
+		sizes []dishesEntity.Size,
+		ingredients []dishesEntity.Ingredient,
+	) (int64, error)
+	Update(
+		ctx context.Context,
+		dish *dishesEntity.Dish,
+		nutrition *dishesEntity.Nutrition,
+		sizes []dishesEntity.Size,
+		ingredients []dishesEntity.Ingredient,
+	) (int64, error)
+	GetAllIngredients(ctx context.Context) ([]dishesEntity.Ingredient, error)
+	GetAllCategories(ctx context.Context) ([]dishesEntity.Category, error)
+	Delete(ctx context.Context, dishID int64) error
 }
 
 type chefUsecase interface {
 	GetChefByDishID(ctx context.Context, dishID int64) (*chefEntity.Chef, error)
 	GetChefByID(ctx context.Context, chefID int64) (*chefEntity.Chef, error)
 	UploadAvatar(ctx context.Context, chefID int64, fileHeader *multipart.FileHeader) (string, error)
+	UploadSmallAvatar(ctx context.Context, chefID int64, fileHeader *multipart.FileHeader) (string, error)
 	GetTopChefs(ctx context.Context, limit int) ([]chefEntity.Chef, error)
 	GetChefAvatarURLByChefID(ctx context.Context, dishID int64) (string, error)
 	GetChefExperienceYears(ctx context.Context, chefID int64) (int, error)
 	GetChefCertifications(ctx context.Context, chefID int64) ([]chefEntity.Certification, error)
+	GetNearestChefs(ctx context.Context, lat, long float64, distance, limit int) ([]chefEntity.Chef, error)
+	GetDistanceToChef(ctx context.Context, lat, long float64, id int64) (float64, error)
+	GetAll(ctx context.Context) ([]chefEntity.Chef, error)
 }
 
 type cartUsecase interface {
@@ -101,8 +130,37 @@ type cartUsecase interface {
 type orderUsecase interface {
 	CreateOrder(ctx context.Context, userID int64, leaveByTheDoor, callBeforehand bool) (int64, error)
 	GetOrdersByShiftID(ctx context.Context, shiftID int64) ([]orders.Order, error)
+	GetCartItemsByOrderID(ctx context.Context, orderID int64) ([]cartentity.CartItem, error)
+	SetStatus(ctx context.Context, orderID int64, status int32) error
+	Accept(ctx context.Context, orderID int64) error
+	CallDelivery(ctx context.Context, orderID int64) error
+	PickUp(ctx context.Context, orderID int64) error
+	Deliver(ctx context.Context, orderID int64) error
+	Reject(ctx context.Context, orderID int64) error
+	GetOrderedDishesAndChefsByUserID(ctx context.Context, userID int64) ([]dishesEntity.Dish, []chefEntity.Chef, error)
+	GetOrderByID(ctx context.Context, orderID int64) (*orders.Order, error)
+	GetOrdersByUserID(ctx context.Context, userID int64) ([]orders.OrderProfile, error)
+	GetActiveOrdersByUserID(ctx context.Context, userID int64) ([]orders.Order, error)
+	CountDishInOrders(ctx context.Context, dishID int64) (int, error)
 }
 
 type shiftsUsecase interface {
 	GetActiveShiftByChefID(ctx context.Context, chefID int64) (*shifts.Shift, error)
+	OpenShift(ctx context.Context, chefID int64) error
+	CloseShift(ctx context.Context, chefID int64) error
+	GetDailyProfits(ctx context.Context, chefID int64) ([]shifts.DailyProfit, error)
+}
+
+type reviewsUsecase interface {
+	CreateReview(ctx context.Context, review reviewsEntity.Review) error
+	GetReviewsByChefID(ctx context.Context, chefID int64) ([]reviewsEntity.Review, error)
+	GetFullReviewsByChefID(ctx context.Context, chefID int64, limit int) ([]reviewsEntity.ReviewWithUser, error)
+	GetRatingStats(ctx context.Context, chefID int64) (map[int16]int32, error)
+}
+
+type favoritesUsecase interface {
+	AddFavoriteChef(ctx context.Context, userID, chefID int64) error
+	RemoveFavoriteChef(ctx context.Context, userID, chefID int64) error
+	AddFavoriteDish(ctx context.Context, userID, dishID int64) error
+	RemoveFavoriteDish(ctx context.Context, userID, dishID int64) error
 }

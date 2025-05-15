@@ -8,6 +8,8 @@ type Dish struct {
 	ImageURL     string `db:"image_url"`
 	Rating       *float32
 	ReviewsCount *int32
+	CategoryID   int64
+	IsDeleted    bool
 }
 
 type Nutrition struct {
@@ -19,12 +21,12 @@ type Nutrition struct {
 }
 
 type Ingredient struct {
-	ID          int64  `db:"id"`
-	Name        string `db:"name"`
-	ImageURL    string `db:"image_url"`
+	ID          int64  `db:"id" json:"id"`
+	Name        string `db:"name" json:"title"`
+	ImageURL    string `db:"image_url" json:"image_url"`
 	IsAllergen  bool   `db:"is_allergen"`
 	CategoryID  int64  `db:"category_id"`
-	IsRemovable bool
+	IsRemovable bool   `json:"is_removable"`
 }
 
 type Size struct {
@@ -40,4 +42,9 @@ type Size struct {
 type Price struct {
 	Value    float32
 	Currency string
+}
+
+type Category struct {
+	ID    int64  `json:"id"`
+	Title string `json:"title"`
 }

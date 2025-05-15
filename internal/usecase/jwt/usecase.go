@@ -37,15 +37,26 @@ func (u *UseCase) ValidateJWT(tokenString string) (map[string]interface{}, error
 	return nil, jwt.ErrSignatureInvalid
 }
 
-func (u *UseCase) GenerateJWT(userID int64, role string) (string, error) {
+func (u *UseCase) GenerateJWT(userID int64, chefID *int64, role string) (string, error) {
 	tokenUUID := uuid.New()
-
-	claims := jwt.MapClaims{
-		"uuid":    tokenUUID.String(),
-		"exp":     time.Now().Add(u.cfg.Exp).Unix(),
-		"iat":     time.Now().Unix(),
-		"role":    role,
-		"user_id": strconv.FormatInt(userID, 10),
+	var claims jwt.MapClaims
+	if chefID == nil {
+		claims = jwt.MapClaims{
+			"uuid":    tokenUUID.String(),
+			"exp":     time.Now().Add(u.cfg.Exp).Unix(),
+			"iat":     time.Now().Unix(),
+			"role":    role,
+			"user_id": strconv.FormatInt(userID, 10),
+		}
+	} else {
+		claims = jwt.MapClaims{
+			"uuid":    tokenUUID.String(),
+			"exp":     time.Now().Add(u.cfg.Exp).Unix(),
+			"iat":     time.Now().Unix(),
+			"role":    role,
+			"user_id": strconv.FormatInt(userID, 10),
+			"chef_id": *chefID,
+		}
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)

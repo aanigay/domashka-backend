@@ -54,18 +54,20 @@ func (h *AuthHandler) Verify(c *gin.Context) {
 		Phone string `json:"phone" binding:"required"`
 		OTP   string `json:"otp" binding:"required"`
 	}
+
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Invalid request"})
+		return
+	}
 	// todo: Убрать костыль перед выгрузкой в прод
 	if request.OTP == "0123" {
-		userID, token, _ := h.authUsecase.Verify(ctx, request.Phone, request.OTP, "admin")
+		userID, chefID, token, _ := h.authUsecase.Verify(ctx, request.Phone, request.OTP, "admin")
 		c.JSON(http.StatusOK, gin.H{"status": "success",
 			"message": "Номер телефона успешно подтверждён.",
 			"token":   token,
 			"user_id": userID,
+			"chef_id": chefID,
 		})
-		return
-	}
-	if err := c.ShouldBindJSON(&request); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Invalid request"})
 		return
 	}
 
@@ -74,7 +76,7 @@ func (h *AuthHandler) Verify(c *gin.Context) {
 		return
 	}
 
-	userID, token, err := h.authUsecase.Verify(ctx, request.Phone, request.OTP, "user")
+	userID, chefID, token, err := h.authUsecase.Verify(ctx, request.Phone, request.OTP, "user")
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Неверный или просроченный OTP."})
 		return
@@ -84,6 +86,7 @@ func (h *AuthHandler) Verify(c *gin.Context) {
 		"message": "Номер телефона успешно подтверждён.",
 		"token":   token,
 		"user_id": userID,
+		"chef_id": chefID,
 	})
 }
 

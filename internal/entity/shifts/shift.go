@@ -10,3 +10,9 @@ type Shift struct {
 	ClosedAt    *time.Time
 	TotalProfit float64
 }
+
+type DailyProfit struct {
+	Month  string
+	Date   string
+	Profit float32
+}

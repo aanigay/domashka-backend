@@ -1,0 +1,2 @@
+ALTER TABLE reviews
+    ADD COLUMN order_id INT DEFAULT 0;

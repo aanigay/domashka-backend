@@ -6,8 +6,8 @@ type Address struct {
 	Longitude      float64 `json:"longitude"`
 	AddressType    string  `json:"address_type"`
 	Name           string  `json:"name"`
-	Address        string  `json:"address"`
-	Comment        string  `json:"comment"`
+	Address        *string `json:"address"`
+	Comment        *string `json:"comment"`
 	FlatNumber     *string `json:"flat_number,omitempty"`
 	FloorNumber    *string `json:"floor_number,omitempty"`
 	EntranceNumber *string `json:"entrance_number,omitempty"`

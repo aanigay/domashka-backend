@@ -2,13 +2,15 @@ package v1
 
 import (
 	"context"
-	"domashka-backend/internal/utils/telemetry"
+	"log"
+	"time"
+
 	"github.com/gin-gonic/gin"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc"
 	"go.opentelemetry.io/otel/sdk/metric"
-	"log"
-	"time"
+
+	"domashka-backend/internal/utils/telemetry"
 )
 
 func NewRouter(
@@ -24,6 +26,8 @@ func NewRouter(
 	cartUsecase cartUsecase,
 	orderUsecase orderUsecase,
 	shiftsUsecase shiftsUsecase,
+	reviewsUsecase reviewsUsecase,
+	favoritesUsecase favoritesUsecase,
 ) {
 	// Options
 	handler.Use(gin.Logger())
@@ -60,18 +64,20 @@ func NewRouter(
 	h := handler.Group("/v1")
 	{
 
-		newUsersHandler(h, l, u)
+		newUsersHandler(h, l, u, reviewsUsecase, orderUsecase, favoritesUsecase, dishesUsecase, chefsUsecase)
 		newAuthHandler(h, a, jwt)
 		authorized := h.Group("/")
 		authorized.Use(AuthMiddleware(jwt))
 		{
 			newNotificationHandler(authorized, n)
 			RegisterGeoHandlers(h, g)
+			NewChefsHandler(authorized, dishesUsecase, chefsUsecase, g, shiftsUsecase, u, reviewsUsecase, orderUsecase)
+			RegisterSearchHandler(authorized, dishesUsecase, chefsUsecase, orderUsecase, reviewsUsecase, u)
+			NewDishesHandler(authorized, dishesUsecase, chefsUsecase, u)
 		}
-		NewDishesHandler(h, dishesUsecase, chefsUsecase)
 		RegisterCartHandlers(h, chefsUsecase, cartUsecase, dishesUsecase, g)
-		NewChefsHandler(h, dishesUsecase, chefsUsecase)
-		RegisterOrderHandlers(h, g, cartUsecase, orderUsecase, shiftsUsecase)
-		NewHomeHandler(authorized, jwt, g, dishesUsecase, chefsUsecase)
+		RegisterOrderHandlers(h, g, cartUsecase, orderUsecase, shiftsUsecase, chefsUsecase)
+		NewHomeHandler(authorized, jwt, g, dishesUsecase, chefsUsecase, orderUsecase, reviewsUsecase)
+		RegisterReviewHandlers(h, reviewsUsecase)
 	}
 }

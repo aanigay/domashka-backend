@@ -1,0 +1,2 @@
+ALTER TABLE IF EXISTS dishes
+DROP COLUMN IF EXISTS is_deleted;

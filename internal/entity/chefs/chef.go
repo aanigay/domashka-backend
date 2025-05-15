@@ -11,6 +11,7 @@ type Chef struct {
 	ID             int64     `db:"id"`
 	Name           string    `db:"name"`
 	ImageURL       string    `db:"image_url"`
+	SmallImageURL  string    `db:"small_image_url"`
 	RoleID         *int      `db:"role_id"`          // Идентификатор роли шефа (связь с таблицей roles)
 	IsSelfEmployed *bool     `db:"is_self_employed"` // Флаг, указывающий на то, что шеф-повар работает как самозанятый
 	IsArchive      *bool     `db:"is_archive"`       // Флаг, указывающий на активность профиля шеф-повара
@@ -21,6 +22,7 @@ type Chef struct {
 	UpdatedAt      time.Time `db:"updated_at"`  // Дата и время последнего обновления записи
 	Description    string    `db:"description"` // Описание шефа BIO
 	LegalInfo      string    `db:"legal_info"`  // Юридическая информация
+	Geo            *Geo
 }
 
 // Certification — запись в таблице certifications.
@@ -36,4 +38,10 @@ type ChefCertification struct {
 	ChefID          int64        `db:"chef_id"`
 	CertificationID int          `db:"certification_id"`
 	IssuedAt        sql.NullTime `db:"issued_at"`
+}
+
+type Geo struct {
+	Latitude  float64 `db:"latitude"`
+	Longitude float64 `db:"longitude"`
+	Distance  float64 `db:"distance"`
 }

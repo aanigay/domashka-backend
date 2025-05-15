@@ -1,0 +1,14 @@
+FROM golang:1.23.3
+
+WORKDIR /app
+
+COPY go.mod go.sum ./
+RUN go mod download
+
+COPY . ./
+
+RUN CGO_ENABLED=0 GOOS=linux go build -o /chef_reviews_worker ./cmd/chef_reviews_worker
+
+RUN chmod +x /chef_reviews_worker
+
+CMD ["/chef_reviews_worker"]

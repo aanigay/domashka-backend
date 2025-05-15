@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	
 	"github.com/jackc/pgx/v4"
 
 	addressentity "domashka-backend/internal/entity/geo"
@@ -124,14 +125,13 @@ func (r *Repository) GetAddressByID(ctx context.Context, id int64) (*addressenti
 func (r *Repository) GetChefAddress(ctx context.Context, chefID int) (addressentity.Address, error) {
 	var address addressentity.Address
 	err := r.pg.Pool.QueryRow(ctx,
-		`SELECT ST_Y(geom::geometry) AS latitude, ST_X(geom::geometry) AS longitude, full_address, comment 
+		`SELECT ST_Y(geom::geometry) AS latitude, ST_X(geom::geometry) AS longitude, comment 
 		 FROM chef_addresses 
 		 WHERE chef_id = $1 LIMIT 1`,
 		chefID,
 	).Scan(
 		&address.Latitude,
 		&address.Longitude,
-		&address.Address,
 		&address.Comment,
 	)
 	if err != nil {
@@ -287,12 +287,14 @@ func (r *Repository) GetClientsAddrByRange(ctx context.Context, chefID int, radi
 func (r *Repository) GetLastUpdatedClientAddress(ctx context.Context, clientID int64) (*addressentity.Address, error) {
 	var address struct {
 		id          int64
-		fullAddress string
+		fullAddress *string
+		longitude   float64
+		latitude    float64
 	}
 	err := r.pg.Pool.QueryRow(ctx,
-		`SELECT id, full_address 
+		`SELECT id, full_address, ST_Y(geom::geometry) AS latitude, ST_X(geom::geometry) AS longitude
 		 FROM client_addresses 
-		 WHERE client_id = $1 ORDER BY updated_at DESC LIMIT 1`, clientID).Scan(&address.id, &address.fullAddress)
+		 WHERE client_id = $1 ORDER BY updated_at DESC LIMIT 1`, clientID).Scan(&address.id, &address.fullAddress, &address.latitude, &address.longitude)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
@@ -300,7 +302,44 @@ func (r *Repository) GetLastUpdatedClientAddress(ctx context.Context, clientID i
 		return nil, fmt.Errorf("could not get last updated client address: %w", err)
 	}
 	return &addressentity.Address{
-		ID:      address.id,
-		Address: address.fullAddress,
+		ID:        address.id,
+		Address:   address.fullAddress,
+		Longitude: address.longitude,
+		Latitude:  address.latitude,
 	}, nil
+}
+
+func (r *Repository) GetChefAddressByID(ctx context.Context, addressID int64) (*addressentity.Address, error) {
+	var address struct {
+		id          int64
+		fullAddress *string
+		longitude   float64
+		latitude    float64
+	}
+	err := r.pg.Pool.QueryRow(ctx,
+		`SELECT id, full_address, ST_Y(geom::geometry) AS latitude, ST_X(geom::geometry) AS longitude
+		 FROM chef_addresses 
+		 WHERE id = $1 ORDER BY updated_at DESC LIMIT 1`, addressID).Scan(&address.id, &address.fullAddress, &address.latitude, &address.longitude)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("could not get last updated client address: %w", err)
+	}
+	return &addressentity.Address{
+		ID:        address.id,
+		Address:   address.fullAddress,
+		Longitude: address.longitude,
+		Latitude:  address.latitude,
+	}, nil
+}
+
+func (r *Repository) GetDistanceToChef(ctx context.Context, lat, long float64, chefID int64) (float64, error) {
+	var distance float64
+	query := `SELECT ST_Distance(geom, ST_MakePoint($1, $2)::geography) AS distance FROM chef_addresses WHERE chef_id = $3`
+	err := r.pg.Pool.QueryRow(ctx, query, long, lat, chefID).Scan(&distance)
+	if err != nil {
+		return 0, fmt.Errorf("could not get distance to chef: %w", err)
+	}
+	return distance, nil
 }

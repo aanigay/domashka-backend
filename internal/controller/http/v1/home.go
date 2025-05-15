@@ -1,6 +1,7 @@
 package v1
 
 import (
+	chefEntity "domashka-backend/internal/entity/chefs"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -8,17 +9,27 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+const (
+	chefsDistanceRange = 15
+	defaultLong        = 37.623150
+	defaultLat         = 55.752507
+)
+
 type homeHandler struct {
 	geoUsecase
 	dishesUsecase
 	chefUsecase
+	orderUsecase
+	reviewsUsecase
 }
 
-func NewHomeHandler(rg *gin.RouterGroup, jwt jwtUsecase, geo geoUsecase, dishes dishesUsecase, chef chefUsecase) {
+func NewHomeHandler(rg *gin.RouterGroup, jwt jwtUsecase, geo geoUsecase, dishes dishesUsecase, chef chefUsecase, order orderUsecase, reviews reviewsUsecase) {
 	hh := homeHandler{
-		geoUsecase:    geo,
-		dishesUsecase: dishes,
-		chefUsecase:   chef,
+		geoUsecase:     geo,
+		dishesUsecase:  dishes,
+		chefUsecase:    chef,
+		orderUsecase:   order,
+		reviewsUsecase: reviews,
 	}
 
 	rg.GET("/home", AuthMiddleware(jwt), hh.getHomePage)
@@ -71,7 +82,7 @@ func (h *homeHandler) getHomePage(c *gin.Context) {
 	// получить для каждого блюда chef_avatar_url
 	dishes := make([]map[string]interface{}, 0)
 	for _, dish := range topDishes {
-		avatarURL, err := h.chefUsecase.GetChefAvatarURLByChefID(ctx, dish.ChefID)
+		chef, err := h.chefUsecase.GetChefByID(ctx, dish.ChefID)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, errorResponse{
 				Status: "error",
@@ -83,8 +94,11 @@ func (h *homeHandler) getHomePage(c *gin.Context) {
 			})
 			return
 		}
-		// TODO: добавить в саджесты категорию
-		suggests := []string{"15-20 мин", "Веган"}
+		category, err := h.dishesUsecase.GetCategoryTitleByDishID(ctx, dish.ID)
+		if err != nil {
+			fmt.Println(err)
+		}
+		suggests := []string{category}
 		minPrice, err := h.dishesUsecase.GetMinimalPriceByDishID(ctx, dish.ID)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, errorResponse{
@@ -100,7 +114,7 @@ func (h *homeHandler) getHomePage(c *gin.Context) {
 		dishes = append(dishes, map[string]interface{}{
 			"id":              dish.ID,
 			"dish_image_url":  dish.ImageURL,
-			"chef_avatar_url": avatarURL,
+			"chef_avatar_url": chef.SmallImageURL,
 			"chef_id":         dish.ChefID,
 			"suggests":        suggests,
 			"name":            dish.Name,
@@ -109,7 +123,12 @@ func (h *homeHandler) getHomePage(c *gin.Context) {
 		})
 	}
 	response["top_dishes"] = dishes
-	topChefs, err := h.GetTopChefs(ctx, 3)
+	var nearestChefs []chefEntity.Chef
+	if address == nil {
+		nearestChefs, err = h.chefUsecase.GetNearestChefs(ctx, defaultLat, defaultLong, chefsDistanceRange, 6)
+	} else {
+		nearestChefs, err = h.chefUsecase.GetNearestChefs(ctx, address.Latitude, address.Longitude, chefsDistanceRange, 6)
+	}
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, errorResponse{
 			Status: "error",
@@ -122,27 +141,56 @@ func (h *homeHandler) getHomePage(c *gin.Context) {
 		return
 	}
 	chefs := make([]map[string]interface{}, 0)
-	for _, topChef := range topChefs {
+	for _, topChef := range nearestChefs {
 		chefInfo := make(map[string]interface{})
 		chefInfo["id"] = topChef.ID
 		chefInfo["name"] = topChef.Name
 		if topChef.Rating != nil && topChef.ReviewsCount != nil {
 			chefInfo["rating_string"] = fmt.Sprintf("%.1f (%d)", *topChef.Rating, *topChef.ReviewsCount)
 		}
-		chefInfo["suggests"] = []string{"15-20 мин", "Мед. книжка"}
-		chefInfo["avatar_url"] = topChef.ImageURL
-		review := make(map[string]interface{})
-		review["name"] = "Ульяна"
-		review["text"] = "Очень понравилось! Обязательно закажем еще"
 
+		var certs []chefEntity.Certification
+
+		certs, err := h.chefUsecase.GetChefCertifications(ctx, topChef.ID)
+		if err != nil {
+			chefInfo["badges"] = []string{}
+		} else {
+			certNames := make([]string, len(certs))
+			for i, cert := range certs {
+				certNames[i] = cert.Name
+			}
+			chefInfo["badges"] = certNames
+		}
+
+		chefInfo["avatar_url"] = topChef.SmallImageURL
+		// Макс кол-во отзывов на странице
+		limit := 1
+		rawReviews, err := h.reviewsUsecase.GetFullReviewsByChefID(ctx, topChef.ID, limit)
+
+		var review map[string]interface{}
+		if err != nil || len(rawReviews) == 0 {
+			review = map[string]interface{}{
+				"name": "",
+				"text": "",
+			}
+		} else {
+			rv := rawReviews[0]
+			review = map[string]interface{}{
+				"name": rv.UserName,
+				"text": rv.Comment,
+			}
+		}
 		chefDishesMap := make([]map[string]interface{}, 0)
-		chefDishes, err := h.dishesUsecase.GetDishesByChefID(ctx, topChef.ID)
+		chefDishes, err := h.dishesUsecase.GetDishesByChefID(ctx, topChef.ID, 6)
 		if err != nil {
 			chefDishesMap = make([]map[string]interface{}, 0)
 			fmt.Println(err)
 			continue
 		}
 		for _, dish := range chefDishes {
+			if dish.IsDeleted {
+				continue
+			}
 			minPrice, err := h.dishesUsecase.GetMinimalPriceByDishID(ctx, dish.ID)
 			if err != nil {
 				fmt.Println(err)
@@ -161,6 +209,19 @@ func (h *homeHandler) getHomePage(c *gin.Context) {
 			"dishes":    chefDishesMap,
 			"review":    review,
 		})
+	}
+	activeOrders, err := h.orderUsecase.GetActiveOrdersByUserID(ctx, userID)
+	if err != nil {
+		fmt.Println(err)
+	} else {
+		ordersResp := make([]map[string]interface{}, 0, len(activeOrders))
+		for _, order := range activeOrders {
+			ordersResp = append(ordersResp, map[string]interface{}{
+				"id":     order.ID,
+				"status": order.Status,
+			})
+		}
+		response["active_orders"] = ordersResp
 	}
 	response["chefs"] = chefs
 	if address != nil {

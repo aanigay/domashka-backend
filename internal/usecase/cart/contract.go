@@ -7,6 +7,8 @@ import (
 	dishentity "domashka-backend/internal/entity/dishes"
 )
 
+//go:generate mockgen -source=contract.go -destination contract_mocks_test.go -package $GOPACKAGE
+
 type CartRepository interface {
 	AddItem(
 		ctx context.Context,

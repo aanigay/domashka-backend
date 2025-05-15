@@ -66,7 +66,7 @@ func (u *UseCase) tgLogin(contact *tele.Contact) error {
 	if err != nil {
 		return err
 	}
-	jwt, err := u.jwtUsecase.GenerateJWT(user.ID, "user")
+	jwt, err := u.jwtUsecase.GenerateJWT(user.ID, nil, "user")
 	if err != nil {
 		return err
 	}
@@ -99,7 +99,7 @@ func (u *UseCase) tgRegister(contact *tele.Contact) error {
 		return err
 	}
 
-	jwt, err := u.jwtUsecase.GenerateJWT(user.ID, "user")
+	jwt, err := u.jwtUsecase.GenerateJWT(user.ID, nil, "user")
 	if err != nil {
 		return err
 	}

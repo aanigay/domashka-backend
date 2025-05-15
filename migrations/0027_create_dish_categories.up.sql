@@ -1,0 +1,11 @@
+CREATE TABLE IF NOT EXISTS dish_categories
+(
+    id BIGINT PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
+    title VARCHAR(255) NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS dishes_dish_categories
+(
+    dish_id BIGINT NOT NULL,
+    category_id BIGINT NOT NULL
+)

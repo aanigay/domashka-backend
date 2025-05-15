@@ -2,60 +2,61 @@ package auth
 
 import (
 	"context"
-	"domashka-backend/internal/entity/auth"
-	userentity "domashka-backend/internal/entity/users"
+	"domashka-backend/internal/utils/pointers"
+	"reflect"
 	"testing"
 	"time"
+
+	"github.com/golang/mock/gomock"
+	"github.com/stretchr/testify/require"
+
+	"domashka-backend/internal/entity/auth"
+	userentity "domashka-backend/internal/entity/users"
 )
 
-type mockUsersRepo struct{}
-type mockRedisClient struct{}
-type mockJwtUsecase struct{}
-type mockSMSClient struct{}
-
 func TestUseCase_Auth(t *testing.T) {
-	type fields struct {
-		usersRepo usersRepo
-		redis     redisClient
-		sms       SMSClient
-		jwt       jwtUsecase
-	}
-	type args struct {
-		ctx context.Context
-		req auth.Request
-	}
 	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		wantErr bool
+		name      string
+		usersRepo func(ctrl *gomock.Controller) usersRepo
+		redis     func(ctrl *gomock.Controller) redisClient
+		sms       func(ctrl *gomock.Controller) SMSClient
+		jwt       func(ctrl *gomock.Controller) jwtUsecase
+		req       auth.Request
+		wantErr   bool
 	}{
 		{
-			name: "success",
-			fields: fields{
-				usersRepo: mockUsersRepo{},
-				redis:     mockRedisClient{},
-				sms:       mockSMSClient{},
-				jwt:       mockJwtUsecase{},
+			name: "user nil",
+			usersRepo: func(ctrl *gomock.Controller) usersRepo {
+				m := NewMockusersRepo(ctrl)
+				m.EXPECT().GetByPhone(gomock.Any(), gomock.Any()).Return(nil, nil)
+				m.EXPECT().CreateWithPhone(gomock.Any(), gomock.Any()).Return(&userentity.User{
+					NumberPhone: pointers.To("81231234567"),
+				}, nil)
+				m.EXPECT().Update(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
+				return m
 			},
-			args: args{
-				ctx: context.Background(),
-				req: auth.Request{
-					Phone: "1234567890",
-				},
+			redis: func(ctrl *gomock.Controller) redisClient {
+				m := NewMockredisClient(ctrl)
+				m.EXPECT().Set(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
+				return m
 			},
-			wantErr: false,
+			sms: func(ctrl *gomock.Controller) SMSClient {
+				m := NewMockSMSClient(ctrl)
+				m.EXPECT().Send(gomock.Any(), gomock.Any()).Return(nil)
+				return m
+			},
+			jwt: func(ctrl *gomock.Controller) jwtUsecase {
+				m := NewMockjwtUsecase(ctrl)
+				return m
+			},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			u := &UseCase{
-				usersRepo: tt.fields.usersRepo,
-				redis:     tt.fields.redis,
-				sms:       tt.fields.sms,
-				jwt:       tt.fields.jwt,
-			}
-			if err := u.Auth(tt.args.ctx, tt.args.req); (err != nil) != tt.wantErr {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+			u := New(tt.usersRepo(ctrl), tt.redis(ctrl), tt.jwt(ctrl), tt.sms(ctrl))
+			if err := u.Auth(context.Background(), tt.req); (err != nil) != tt.wantErr {
 				t.Errorf("Auth() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
@@ -63,142 +64,161 @@ func TestUseCase_Auth(t *testing.T) {
 }
 
 func TestUseCase_AuthViaTg(t *testing.T) {
-	type fields struct {
-		usersRepo usersRepo
-		redis     redisClient
-		sms       SMSClient
-		jwt       jwtUsecase
-	}
-	type args struct {
-		ctx         context.Context
-		phoneNumber string
-	}
 	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		wantErr bool
+		name      string
+		usersRepo func(ctrl *gomock.Controller) usersRepo
+		redis     func(ctrl *gomock.Controller) redisClient
+		sms       func(ctrl *gomock.Controller) SMSClient
+		jwt       func(ctrl *gomock.Controller) jwtUsecase
+		in        string
+		wantErr   bool
 	}{
 		{
 			name: "success",
-			fields: fields{
-				usersRepo: mockUsersRepo{},
-				redis:     mockRedisClient{},
-				sms:       mockSMSClient{},
-				jwt:       mockJwtUsecase{},
+			usersRepo: func(ctrl *gomock.Controller) usersRepo {
+				m := NewMockusersRepo(ctrl)
+				m.EXPECT().GetByPhone(gomock.Any(), gomock.Any()).Return(&userentity.User{
+					NumberPhone: pointers.To("81231234567"),
+				}, nil)
+				return m
 			},
-			args: args{
-				ctx:         context.Background(),
-				phoneNumber: "1234567890",
+			redis: func(ctrl *gomock.Controller) redisClient {
+				m := NewMockredisClient(ctrl)
+				m.EXPECT().Set(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
+				return m
 			},
-			wantErr: false,
+			sms: func(ctrl *gomock.Controller) SMSClient {
+				m := NewMockSMSClient(ctrl)
+				return m
+			},
+			jwt: func(ctrl *gomock.Controller) jwtUsecase {
+				m := NewMockjwtUsecase(ctrl)
+				return m
+			},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			u := &UseCase{
-				usersRepo: tt.fields.usersRepo,
-				redis:     tt.fields.redis,
-				sms:       tt.fields.sms,
-				jwt:       tt.fields.jwt,
-			}
-			if err := u.AuthViaTg(tt.args.ctx, tt.args.phoneNumber); (err != nil) != tt.wantErr {
-				t.Errorf("AuthViaTg() error = %v, wantErr %v", err, tt.wantErr)
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+			u := New(tt.usersRepo(ctrl), tt.redis(ctrl), tt.jwt(ctrl), tt.sms(ctrl))
+			if err := u.AuthViaTg(context.Background(), tt.in); (err != nil) != tt.wantErr {
+				t.Errorf("Auth() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
 	}
 }
 
 func TestUseCase_AuthViaTgStatus(t *testing.T) {
-	type fields struct {
-		usersRepo usersRepo
-		redis     redisClient
-		sms       SMSClient
-		jwt       jwtUsecase
-	}
-	type args struct {
-		in0         context.Context
-		phoneNumber string
-	}
 	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		want    string
-		wantErr bool
+		name      string
+		usersRepo func(ctrl *gomock.Controller) usersRepo
+		redis     func(ctrl *gomock.Controller) redisClient
+		sms       func(ctrl *gomock.Controller) SMSClient
+		jwt       func(ctrl *gomock.Controller) jwtUsecase
+		in        string
+		want      string
+		wantErr   bool
 	}{
 		{
 			name: "success",
-			fields: fields{
-				usersRepo: mockUsersRepo{},
-				redis:     mockRedisClient{},
-				sms:       mockSMSClient{},
-				jwt:       mockJwtUsecase{},
+			usersRepo: func(ctrl *gomock.Controller) usersRepo {
+				m := NewMockusersRepo(ctrl)
+				return m
 			},
-			args: args{
-				in0:         context.Background(),
-				phoneNumber: "1234567890",
+			redis: func(ctrl *gomock.Controller) redisClient {
+				m := NewMockredisClient(ctrl)
+				m.EXPECT().IsExpired(gomock.Any()).Return(false, nil)
+				m.EXPECT().Get(gomock.Any()).Return("token", nil)
+				return m
 			},
-			want:    "success",
-			wantErr: false,
+			sms: func(ctrl *gomock.Controller) SMSClient {
+				m := NewMockSMSClient(ctrl)
+				return m
+			},
+			jwt: func(ctrl *gomock.Controller) jwtUsecase {
+				m := NewMockjwtUsecase(ctrl)
+				return m
+			},
+			want: "token",
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			u := &UseCase{
-				usersRepo: tt.fields.usersRepo,
-				redis:     tt.fields.redis,
-				sms:       tt.fields.sms,
-				jwt:       tt.fields.jwt,
-			}
-			got, err := u.AuthViaTgStatus(tt.args.in0, tt.args.phoneNumber)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("AuthViaTgStatus() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if got != tt.want {
-				t.Errorf("AuthViaTgStatus() got = %v, want %v", got, tt.want)
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+			u := New(tt.usersRepo(ctrl), tt.redis(ctrl), tt.jwt(ctrl), tt.sms(ctrl))
+			if out, err := u.AuthViaTgStatus(context.Background(), tt.in); (err != nil) != tt.wantErr {
+				t.Errorf("Auth() error = %v, wantErr %v", err, tt.wantErr)
+			} else {
+				require.Equal(t, tt.want, out)
 			}
 		})
 	}
 }
 
 func TestUseCase_Verify(t *testing.T) {
-	type fields struct {
-		usersRepo usersRepo
-		redis     redisClient
-		sms       SMSClient
-		jwt       jwtUsecase
-	}
-	type args struct {
-		ctx   context.Context
-		phone string
-		otp   string
-		role  string
-	}
 	tests := []struct {
 		name       string
-		fields     fields
-		args       args
+		usersRepo  func(ctrl *gomock.Controller) usersRepo
+		redis      func(ctrl *gomock.Controller) redisClient
+		sms        func(ctrl *gomock.Controller) SMSClient
+		jwt        func(ctrl *gomock.Controller) jwtUsecase
+		phone      string
+		otp        string
+		role       string
 		wantUserID int64
+		wantChefID *int64
 		wantToken  string
 		wantErr    bool
-	}{}
+	}{
+		{
+			name: "success",
+			usersRepo: func(ctrl *gomock.Controller) usersRepo {
+				m := NewMockusersRepo(ctrl)
+				m.EXPECT().CheckIfUserIsChef(gomock.Any(), int64(1)).Return(nil, false, nil)
+				m.EXPECT().GetByPhone(gomock.Any(), gomock.Any()).Return(&userentity.User{
+					ID: int64(1),
+				}, nil)
+				return m
+			},
+			redis: func(ctrl *gomock.Controller) redisClient {
+				m := NewMockredisClient(ctrl)
+				return m
+			},
+			sms: func(ctrl *gomock.Controller) SMSClient {
+				m := NewMockSMSClient(ctrl)
+				return m
+			},
+			jwt: func(ctrl *gomock.Controller) jwtUsecase {
+				m := NewMockjwtUsecase(ctrl)
+				m.EXPECT().GenerateJWT(int64(1), nil, "admin").Return("token", nil)
+				return m
+			},
+			phone:      "81231234567",
+			otp:        "0123",
+			role:       "admin",
+			wantUserID: 1,
+			wantToken:  "token",
+			wantErr:    false,
+			wantChefID: nil,
+		},
+	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			u := &UseCase{
-				usersRepo: tt.fields.usersRepo,
-				redis:     tt.fields.redis,
-				sms:       tt.fields.sms,
-				jwt:       tt.fields.jwt,
-			}
-			gotUserID, gotToken, err := u.Verify(tt.args.ctx, tt.args.phone, tt.args.otp, tt.args.role)
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+			u := New(tt.usersRepo(ctrl), tt.redis(ctrl), tt.jwt(ctrl), tt.sms(ctrl))
+			gotUserID, gotChefID, gotToken, err := u.Verify(context.Background(), tt.phone, tt.otp, tt.role)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Verify() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 			if gotUserID != tt.wantUserID {
 				t.Errorf("Verify() gotUserID = %v, want %v", gotUserID, tt.wantUserID)
+			}
+			if !reflect.DeepEqual(gotChefID, tt.wantChefID) {
+				t.Errorf("Verify() gotChefID = %v, want %v", gotChefID, tt.wantChefID)
 			}
 			if gotToken != tt.wantToken {
 				t.Errorf("Verify() gotToken = %v, want %v", gotToken, tt.wantToken)
@@ -208,30 +228,53 @@ func TestUseCase_Verify(t *testing.T) {
 }
 
 func TestUseCase_login(t *testing.T) {
-	type fields struct {
-		usersRepo usersRepo
-		redis     redisClient
-		sms       SMSClient
-		jwt       jwtUsecase
-	}
 	type args struct {
 		ctx  context.Context
 		user *userentity.User
 	}
 	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		wantErr bool
-	}{}
+		name      string
+		usersRepo func(ctrl *gomock.Controller) usersRepo
+		redis     func(ctrl *gomock.Controller) redisClient
+		sms       func(ctrl *gomock.Controller) SMSClient
+		jwt       func(ctrl *gomock.Controller) jwtUsecase
+		args      args
+		wantErr   bool
+	}{
+		{
+			name: "success",
+			args: args{
+				ctx: context.Background(),
+				user: &userentity.User{
+					NumberPhone: pointers.To("81231235656"),
+				},
+			},
+			redis: func(ctrl *gomock.Controller) redisClient {
+				m := NewMockredisClient(ctrl)
+				m.EXPECT().Set(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
+				return m
+			},
+			sms: func(ctrl *gomock.Controller) SMSClient {
+				m := NewMockSMSClient(ctrl)
+				m.EXPECT().Send(gomock.Any(), gomock.Any()).Return(nil)
+				return m
+			},
+			jwt: func(ctrl *gomock.Controller) jwtUsecase {
+				m := NewMockjwtUsecase(ctrl)
+				return m
+			},
+			usersRepo: func(ctrl *gomock.Controller) usersRepo {
+				m := NewMockusersRepo(ctrl)
+				m.EXPECT().Update(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
+				return m
+			},
+		},
+	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			u := &UseCase{
-				usersRepo: tt.fields.usersRepo,
-				redis:     tt.fields.redis,
-				sms:       tt.fields.sms,
-				jwt:       tt.fields.jwt,
-			}
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+			u := New(tt.usersRepo(ctrl), tt.redis(ctrl), tt.jwt(ctrl), tt.sms(ctrl))
 			if err := u.login(tt.args.ctx, tt.args.user); (err != nil) != tt.wantErr {
 				t.Errorf("login() error = %v, wantErr %v", err, tt.wantErr)
 			}
@@ -240,135 +283,77 @@ func TestUseCase_login(t *testing.T) {
 }
 
 func TestUseCase_register(t *testing.T) {
-	type fields struct {
-		usersRepo usersRepo
-		redis     redisClient
-		sms       SMSClient
-		jwt       jwtUsecase
-	}
 	type args struct {
 		ctx   context.Context
 		phone string
 	}
 	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		wantErr bool
-	}{}
+		name      string
+		usersRepo func(ctrl *gomock.Controller) usersRepo
+		redis     func(ctrl *gomock.Controller) redisClient
+		sms       func(ctrl *gomock.Controller) SMSClient
+		jwt       func(ctrl *gomock.Controller) jwtUsecase
+		args      args
+		wantErr   bool
+	}{
+		{
+			name: "success",
+			args: args{
+				ctx:   context.Background(),
+				phone: "81231235656",
+			},
+			redis: func(ctrl *gomock.Controller) redisClient {
+				m := NewMockredisClient(ctrl)
+				m.EXPECT().Set(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
+				return m
+			},
+			sms: func(ctrl *gomock.Controller) SMSClient {
+				m := NewMockSMSClient(ctrl)
+				m.EXPECT().Send(gomock.Any(), gomock.Any()).Return(nil)
+				return m
+			},
+			jwt: func(ctrl *gomock.Controller) jwtUsecase {
+				m := NewMockjwtUsecase(ctrl)
+				return m
+			},
+			usersRepo: func(ctrl *gomock.Controller) usersRepo {
+				m := NewMockusersRepo(ctrl)
+				m.EXPECT().CreateWithPhone(gomock.Any(), gomock.Any()).Return(&userentity.User{
+					ID:               0,
+					Username:         "",
+					Alias:            "",
+					FirstName:        "",
+					SecondName:       nil,
+					LastName:         nil,
+					Email:            nil,
+					NumberPhone:      pointers.To("81231235656"),
+					IsSpam:           0,
+					SMSAttempts:      0,
+					LastSMSRequest:   nil,
+					Status:           0,
+					ExternalType:     0,
+					TelegramName:     nil,
+					ExternalID:       nil,
+					NotificationFlag: 0,
+					Role:             "",
+					Birthday:         nil,
+					Name:             "",
+					ChatID:           "",
+					CreatedAt:        time.Time{},
+					UpdatedAt:        time.Time{},
+				}, nil)
+				m.EXPECT().Update(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
+				return m
+			},
+		},
+	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			u := &UseCase{
-				usersRepo: tt.fields.usersRepo,
-				redis:     tt.fields.redis,
-				sms:       tt.fields.sms,
-				jwt:       tt.fields.jwt,
-			}
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+			u := New(tt.usersRepo(ctrl), tt.redis(ctrl), tt.jwt(ctrl), tt.sms(ctrl))
 			if err := u.register(tt.args.ctx, tt.args.phone); (err != nil) != tt.wantErr {
 				t.Errorf("register() error = %v, wantErr %v", err, tt.wantErr)
-			}
-		})
-	}
-}
-
-func TestUseCase_sendOTP(t *testing.T) {
-	type fields struct {
-		usersRepo usersRepo
-		redis     redisClient
-		sms       SMSClient
-		jwt       jwtUsecase
-	}
-	type args struct {
-		ctx  context.Context
-		user *userentity.User
-		otp  string
-	}
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		wantErr bool
-	}{}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			u := &UseCase{
-				usersRepo: tt.fields.usersRepo,
-				redis:     tt.fields.redis,
-				sms:       tt.fields.sms,
-				jwt:       tt.fields.jwt,
-			}
-			if err := u.sendOTP(tt.args.ctx, tt.args.user, tt.args.otp); (err != nil) != tt.wantErr {
-				t.Errorf("sendOTP() error = %v, wantErr %v", err, tt.wantErr)
-			}
-		})
-	}
-}
-
-func TestUseCase_validateOTP(t *testing.T) {
-	type fields struct {
-		usersRepo usersRepo
-		redis     redisClient
-		sms       SMSClient
-		jwt       jwtUsecase
-	}
-	type args struct {
-		phone string
-		otp   string
-	}
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		want    bool
-		wantErr bool
-	}{}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			u := &UseCase{
-				usersRepo: tt.fields.usersRepo,
-				redis:     tt.fields.redis,
-				sms:       tt.fields.sms,
-				jwt:       tt.fields.jwt,
-			}
-			got, err := u.validateOTP(tt.args.phone, tt.args.otp)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("validateOTP() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if got != tt.want {
-				t.Errorf("validateOTP() got = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
-
-func Test_generateOTP(t *testing.T) {
-	tests := []struct {
-		name string
-		want string
-	}{}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := generateOTP(); got != tt.want {
-				t.Errorf("generateOTP() = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
-
-func Test_getSMSDelay(t *testing.T) {
-	type args struct {
-		attempts int
-	}
-	tests := []struct {
-		name string
-		args args
-		want time.Duration
-	}{}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := getSMSDelay(tt.args.attempts); got != tt.want {
-				t.Errorf("getSMSDelay() = %v, want %v", got, tt.want)
 			}
 		})
 	}

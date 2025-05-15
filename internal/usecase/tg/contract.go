@@ -6,6 +6,8 @@ import (
 	"time"
 )
 
+//go:generate mockgen -source=contract.go -destination contract_mocks_test.go -package $GOPACKAGE
+
 type redisClient interface {
 	Set(key string, value string, ttl time.Duration) error
 	Get(key string) (string, error)
@@ -14,7 +16,7 @@ type redisClient interface {
 }
 
 type jwtUsecase interface {
-	GenerateJWT(userID int64, role string) (string, error)
+	GenerateJWT(userID int64, chefID *int64, role string) (string, error)
 }
 
 type usersRepo interface {

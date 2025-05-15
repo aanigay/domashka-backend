@@ -3,6 +3,7 @@ package v1
 import (
 	"fmt"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -117,6 +118,7 @@ func (h *cartHandler) GetCartView(c *gin.Context) {
 	}
 
 	dishGroups := make([]DishGroup, 0)
+	allDishIDs := make([]int64, 0)
 	for chefID, items := range chefDishes {
 		chef, err := h.chefUsecase.GetChefByID(ctx, chefID)
 		if err != nil {
@@ -166,18 +168,19 @@ func (h *cartHandler) GetCartView(c *gin.Context) {
 				},
 				ImageURL: item.Dish.ImageURL,
 			})
+			allDishIDs = append(allDishIDs, item.Dish.ID)
 		}
 		dishGroups = append(dishGroups, DishGroup{
 			ChefID:   chefID,
 			ChefName: chef.Name,
-			ImageURL: chef.ImageURL,
+			ImageURL: chef.SmallImageURL,
 			Dishes:   d,
 		})
 	}
 	// TODO: calculate delivery cost
 	dishSnippets := make([]dishSnippet, 0)
 	if len(dishGroups) > 0 {
-		relatedDishes, err := h.dishesUsecase.GetDishesByChefID(ctx, dishGroups[0].ChefID)
+		relatedDishes, err := h.dishesUsecase.GetDishesByChefID(ctx, dishGroups[0].ChefID, 6)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, errorResponse{
 				Status: "error",
@@ -190,6 +193,9 @@ func (h *cartHandler) GetCartView(c *gin.Context) {
 			return
 		}
 		for _, dish := range relatedDishes {
+			if slices.Contains(allDishIDs, dish.ID) {
+				continue
+			}
 			price, err := h.dishesUsecase.GetMinimalPriceByDishID(ctx, dish.ID)
 			if err != nil {
 				c.JSON(http.StatusInternalServerError, errorResponse{
@@ -220,7 +226,7 @@ func (h *cartHandler) GetCartView(c *gin.Context) {
 	if address != nil {
 		addressResp = &Address{
 			ID:    address.ID,
-			Title: address.Address,
+			Title: pointers.From(address.Address),
 		}
 	}
 	resp := GetCartViewSuccessResponseData{

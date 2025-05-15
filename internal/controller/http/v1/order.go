@@ -17,14 +17,23 @@ type orderHandler struct {
 	cartUsecase   cartUsecase
 	orderUsecase  orderUsecase
 	shiftsUsecase shiftsUsecase
+	chefUsecase   chefUsecase
 }
 
-func RegisterOrderHandlers(rg *gin.RouterGroup, geoUsecase geoUsecase, cartUsecase cartUsecase, orderUsecase orderUsecase, shiftUsecase shiftsUsecase) {
+func RegisterOrderHandlers(
+	rg *gin.RouterGroup,
+	geoUsecase geoUsecase,
+	cartUsecase cartUsecase,
+	orderUsecase orderUsecase,
+	shiftUsecase shiftsUsecase,
+	chefUsecase chefUsecase,
+) {
 	c := orderHandler{
 		geoUsecase:    geoUsecase,
 		cartUsecase:   cartUsecase,
 		orderUsecase:  orderUsecase,
 		shiftsUsecase: shiftUsecase,
+		chefUsecase:   chefUsecase,
 	}
 
 	rg.GET("/chef/home", c.chefMain)
@@ -33,6 +42,12 @@ func RegisterOrderHandlers(rg *gin.RouterGroup, geoUsecase geoUsecase, cartUseca
 	rg.GET("/final_form", c.GetFinalForm)
 	rg.POST("/create", c.createOrder)
 	rg.GET("/")
+	rg.POST("/accept", c.accept)
+	rg.POST("/reject", c.reject)
+	rg.POST("/call_delivery", c.callDelivery)
+	rg.POST("/pickup", c.pickUp)
+	rg.POST("/deliver", c.deliver)
+	rg.GET("/status", c.getStatus)
 }
 
 type GetOrderDetailsFormData struct {
@@ -91,7 +106,7 @@ func (h *orderHandler) GetDetailsForm(c *gin.Context) {
 	if address != nil {
 		addressResp = &Address{
 			ID:    address.ID,
-			Title: address.Address,
+			Title: pointers.From(address.Address),
 		}
 	}
 	c.JSON(http.StatusOK, gin.H{
@@ -362,7 +377,7 @@ func (h *orderHandler) chefMain(c *gin.Context) {
 	}
 	orderCartItemsMap := map[int64]kek{}
 	for _, order := range o {
-		cartItems, err := h.cartUsecase.GetCartItemsByOrderID(ctx, order.ID)
+		cartItems, err := h.orderUsecase.GetCartItemsByOrderID(ctx, order.ID)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, errorResponse{
 				Status: "error",
@@ -401,6 +416,8 @@ func (h *orderHandler) chefMain(c *gin.Context) {
 				dish["name"] = item.Dish.Name
 				dish["details"] = item.GetDetailsString()
 				dish["image_url"] = item.Dish.ImageURL
+				dish["price"] = item.Size.PriceValue
+				dish["quantity"] = item.Quantity
 				dishes = append(dishes, dish)
 			}
 			order["dishes"] = dishes
@@ -413,5 +430,271 @@ func (h *orderHandler) chefMain(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"status": "success",
 		"data":   response,
+	})
+}
+
+func (h *orderHandler) accept(c *gin.Context) {
+	ctx := c.Request.Context()
+	orderID, err := strconv.ParseInt(c.Query("order_id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, errorResponse{
+			Status: "error",
+			Err: errorMessage{
+				Code:    4002,
+				Message: "Invalid order ID",
+				Details: "Передан некорректный ID заказа.",
+			},
+		})
+		return
+	}
+	err = h.orderUsecase.Accept(ctx, orderID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, errorResponse{
+			Status: "error",
+			Err: errorMessage{
+				Code:    http.StatusInternalServerError,
+				Message: err.Error(),
+				Details: err.Error(),
+			},
+		})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"status": "success",
+	})
+}
+
+func (h *orderHandler) callDelivery(c *gin.Context) {
+	ctx := c.Request.Context()
+	orderID, err := strconv.ParseInt(c.Query("order_id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, errorResponse{
+			Status: "error",
+			Err: errorMessage{
+				Code:    4002,
+				Message: "Invalid order ID",
+				Details: "Передан некорректный ID заказа.",
+			},
+		})
+		return
+	}
+	err = h.orderUsecase.CallDelivery(ctx, orderID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, errorResponse{
+			Status: "error",
+			Err: errorMessage{
+				Code:    http.StatusInternalServerError,
+				Message: err.Error(),
+				Details: err.Error(),
+			},
+		})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"status": "success",
+	})
+}
+
+func (h *orderHandler) pickUp(c *gin.Context) {
+	ctx := c.Request.Context()
+	orderID, err := strconv.ParseInt(c.Query("order_id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, errorResponse{
+			Status: "error",
+			Err: errorMessage{
+				Code:    4002,
+				Message: "Invalid order ID",
+				Details: "Передан некорректный ID заказа.",
+			},
+		})
+		return
+	}
+	err = h.orderUsecase.PickUp(ctx, orderID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, errorResponse{
+			Status: "error",
+			Err: errorMessage{
+				Code:    http.StatusInternalServerError,
+				Message: err.Error(),
+				Details: err.Error(),
+			},
+		})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"status": "success",
+	})
+}
+
+func (h *orderHandler) deliver(c *gin.Context) {
+	ctx := c.Request.Context()
+	orderID, err := strconv.ParseInt(c.Query("order_id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, errorResponse{
+			Status: "error",
+			Err: errorMessage{
+				Code:    4002,
+				Message: "Invalid order ID",
+				Details: "Передан некорректный ID заказа.",
+			},
+		})
+		return
+	}
+	err = h.orderUsecase.Deliver(ctx, orderID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, errorResponse{
+			Status: "error",
+			Err: errorMessage{
+				Code:    http.StatusInternalServerError,
+				Message: err.Error(),
+				Details: err.Error(),
+			},
+		})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"status": "success",
+	})
+}
+
+func (h *orderHandler) reject(c *gin.Context) {
+	ctx := c.Request.Context()
+	orderID, err := strconv.ParseInt(c.Query("order_id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, errorResponse{
+			Status: "error",
+			Err: errorMessage{
+				Code:    4002,
+				Message: "Invalid order ID",
+				Details: "Передан некорректный ID заказа.",
+			},
+		})
+		return
+	}
+	err = h.orderUsecase.Reject(ctx, orderID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, errorResponse{
+			Status: "error",
+			Err: errorMessage{
+				Code:    http.StatusInternalServerError,
+				Message: err.Error(),
+				Details: err.Error(),
+			},
+		})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"status": "success",
+	})
+}
+
+func (h *orderHandler) getStatus(c *gin.Context) {
+	ctx := c.Request.Context()
+	orderID, err := strconv.ParseInt(c.Query("order_id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, errorResponse{
+			Status: "error",
+			Err: errorMessage{
+				Code:    4002,
+				Message: "Invalid order ID",
+				Details: "Передан некорректный ID заказа.",
+			},
+		})
+		return
+	}
+	order, err := h.orderUsecase.GetOrderByID(ctx, orderID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, errorResponse{
+			Status: "error",
+			Err: errorMessage{
+				Code:    http.StatusInternalServerError,
+				Message: err.Error(),
+				Details: err.Error(),
+			},
+		})
+		return
+	}
+	// получить адрес клиента
+	clientAddress, err := h.geoUsecase.GetAddressByID(ctx, order.ClientAddressID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, errorResponse{
+			Status: "error",
+			Err: errorMessage{
+				Code:    http.StatusInternalServerError,
+				Message: err.Error(),
+				Details: err.Error(),
+			},
+		})
+		return
+	}
+	// получить адрес повара
+	chefAddress, err := h.geoUsecase.GetChefAddress(ctx, int(order.ChefID))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, errorResponse{
+			Status: "error",
+			Err: errorMessage{
+				Code:    http.StatusInternalServerError,
+				Message: err.Error(),
+				Details: err.Error(),
+			},
+		})
+		return
+	}
+
+	// получить айтемы заказа
+	items, err := h.orderUsecase.GetCartItemsByOrderID(ctx, orderID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, errorResponse{
+			Status: "error",
+			Err: errorMessage{
+				Code:    http.StatusInternalServerError,
+				Message: err.Error(),
+				Details: err.Error(),
+			},
+		})
+		return
+	}
+	dishes := make([]map[string]interface{}, 0, len(items))
+	for _, item := range items {
+		chef, err := h.chefUsecase.GetChefByDishID(ctx, item.Dish.ID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, errorResponse{
+				Status: "error",
+				Err: errorMessage{
+					Code:    http.StatusInternalServerError,
+					Message: err.Error(),
+					Details: err.Error(),
+				},
+			})
+			return
+		}
+		dish := map[string]interface{}{
+			"dish_id":    item.Dish.ID,
+			"name":       item.Dish.Name,
+			"quantity":   item.Quantity,
+			"image_url":  item.Dish.ImageURL,
+			"avatar_url": chef.SmallImageURL,
+			"price":      item.Size.PriceValue,
+			"chef_id":    item.Dish.ChefID,
+		}
+		dishes = append(dishes, dish)
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"status": "success",
+		"data": gin.H{
+			"dishes": dishes,
+			"status": order.Status,
+			"client_address": gin.H{
+				"address":   clientAddress.Address,
+				"longitude": clientAddress.Longitude,
+				"latitude":  clientAddress.Latitude,
+			},
+			"chef_address": gin.H{
+				"longitude": chefAddress.Longitude,
+				"latitude":  chefAddress.Latitude,
+			},
+			"leave_by_the_door": order.LeaveByTheDoor,
+			"comment":           clientAddress.Comment,
+		},
 	})
 }

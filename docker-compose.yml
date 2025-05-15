@@ -15,7 +15,7 @@ services:
     volumes:
       - ./logs:/app/logs
     ports:
-      - "9093:9092"
+      - "9093:9094"
     environment:
       - DB_HOST=postgres
       - DB_PORT=5432

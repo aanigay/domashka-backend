@@ -2,6 +2,8 @@ package users
 
 import (
 	"context"
+	chefsEntity "domashka-backend/internal/entity/chefs"
+	dishesEntity "domashka-backend/internal/entity/dishes"
 
 	usersEntity "domashka-backend/internal/entity/users"
 )
@@ -30,4 +32,14 @@ func (u *UseCase) Update(ctx context.Context, id int64, user usersEntity.User) e
 
 func (u *UseCase) Delete(ctx context.Context, id int64) error {
 	return u.repo.Delete(ctx, id)
+}
+
+func (u *UseCase) CheckIfUserIsChef(ctx context.Context, userID int64) (*int64, bool, error) {
+	return u.repo.CheckIfUserIsChef(ctx, userID)
+}
+func (u *UseCase) GetFavoritesDishesByUserID(ctx context.Context, userID int64) ([]dishesEntity.Dish, error) {
+	return u.repo.GetFavoritesDishesByUserID(ctx, userID)
+}
+func (u *UseCase) GetFavoritesChefsByUserID(ctx context.Context, userID int64) ([]chefsEntity.Chef, error) {
+	return u.repo.GetFavoritesChefsByUserID(ctx, userID)
 }

@@ -18,6 +18,8 @@ type Config struct {
 	JWT        *JWTConfig
 	SMTP       *SMTPEmailConfig
 	Telegram   *TelegramConfig
+	S3         *S3Config
+	Kafka      *KafkaConfig
 }
 
 type SMTPEmailConfig struct {
@@ -51,6 +53,10 @@ type HostConfig struct {
 type TelegramConfig struct {
 	Token     string
 	IsEnabled bool
+}
+
+type KafkaConfig struct {
+	URL string
 }
 
 // GetConfig загружает конфигурацию из файла .env и переменных окружения
@@ -106,6 +112,13 @@ func GetConfig() *Config {
 		log.Fatalf("Не задан токен Telegram бота")
 	}
 
+	s3Config, err := GetS3Config()
+	if err != nil {
+		log.Fatal(err)
+	}
+	kafka := &KafkaConfig{
+		URL: os.Getenv("KAFKA_URL"),
+	}
 	return &Config{
 		HostConfig: &HostConfig{
 			Port: os.Getenv("PORT"),
@@ -136,6 +149,8 @@ func GetConfig() *Config {
 			Token:     tgToken,
 			IsEnabled: tgEnabled,
 		},
+		S3:    s3Config,
+		Kafka: kafka,
 	}
 }
 

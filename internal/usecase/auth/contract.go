@@ -7,10 +7,13 @@ import (
 	usersentity "domashka-backend/internal/entity/users"
 )
 
+//go:generate mockgen -source=contract.go -destination contract_mocks_test.go -package $GOPACKAGE
+
 type usersRepo interface {
 	CreateWithPhone(ctx context.Context, phone string) (*usersentity.User, error)
 	GetByPhone(ctx context.Context, phone string) (*usersentity.User, error)
 	Update(ctx context.Context, id int64, user usersentity.User) error
+	CheckIfUserIsChef(ctx context.Context, userID int64) (*int64, bool, error)
 }
 
 type redisClient interface {
@@ -21,7 +24,7 @@ type redisClient interface {
 
 type jwtUsecase interface {
 	ValidateJWT(tokenString string) (map[string]interface{}, error)
-	GenerateJWT(userID int64, role string) (string, error)
+	GenerateJWT(userID int64, chefID *int64, role string) (string, error)
 }
 
 type SMSClient interface {
